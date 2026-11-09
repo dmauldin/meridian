@@ -11,3 +11,4 @@ artifacts/
 .godot/
 .import/
 export_presets.cfg
+deploy/.env
