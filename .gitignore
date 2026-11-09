@@ -1,0 +1,13 @@
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+.idea/
+TestResults/
+artifacts/
+*.swp
+# Godot (client/ arrives in M1)
+.godot/
+.import/
+export_presets.cfg

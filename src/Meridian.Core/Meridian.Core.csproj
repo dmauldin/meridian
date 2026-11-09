@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure rules library: no I/O, no engine types, no package dependencies. -->
+</Project>

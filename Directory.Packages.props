@@ -1,0 +1,6 @@
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="LiteNetLib" Version="2.1.5" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
+  </ItemGroup>
+</Project>
