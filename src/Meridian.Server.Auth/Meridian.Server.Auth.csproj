@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../Meridian.Net/Meridian.Net.csproj" />
+  </ItemGroup>
+</Project>

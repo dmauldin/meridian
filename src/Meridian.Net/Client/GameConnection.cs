@@ -27,7 +27,7 @@ public sealed class GameConnection : IDisposable
         listener.PeerDisconnectedEvent += (_, info) =>
         {
             Connected = false;
-            DisconnectReason ??= info.Reason.ToString();
+            DisconnectReason ??= ExplainDisconnect(info);
         };
         listener.NetworkReceiveEvent += OnReceive;
         _net = NetDefaults.Configure(new NetManager(listener));
@@ -93,6 +93,35 @@ public sealed class GameConnection : IDisposable
     {
         _net.Stop();
         _cipher?.Dispose();
+    }
+
+    /// <summary>
+    /// Turns LiteNetLib's disconnect info into a message for the player. Rejections carry a plain
+    /// UTF-8 reason (no session exists yet); kicks carry a sealed <see cref="Disconnecting"/>.
+    /// </summary>
+    private string ExplainDisconnect(DisconnectInfo info)
+    {
+        var data = info.AdditionalData is null ? default : info.AdditionalData.GetRemainingBytesSpan();
+        if (data.IsEmpty)
+        {
+            return info.Reason.ToString();
+        }
+        if (info.Reason == LiteNetLib.DisconnectReason.ConnectionRejected)
+        {
+            return System.Text.Encoding.UTF8.GetString(data);
+        }
+        var length = _cipher?.Open(data, _plain) ?? -1;
+        if (length > 0)
+        {
+            try
+            {
+                return Envelope.Decode<Disconnecting>(_plain.AsSpan(0, length)).Reason ?? info.Reason.ToString();
+            }
+            catch (WireFormatException)
+            {
+            }
+        }
+        return info.Reason.ToString();
     }
 
     private void OnReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
