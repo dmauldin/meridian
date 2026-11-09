@@ -249,3 +249,21 @@ public class ZoneSimulationTests
         Assert.Equal(1, sim.PlayerCount);
     }
 }
+
+public class ZoneDeterminismTests
+{
+    [Fact]
+    public void Spawn_points_are_identical_across_runs()
+    {
+        // Golden values: these must not depend on per-process hash seeds.
+        var sim = new ZoneSimulation(new ZoneOptions(), new RecordingOutbox());
+        var p1 = sim.Join(new ClientRef(1, 1), 1, "a");
+        var p2 = sim.Join(new ClientRef(1, 2), 2, "b");
+        Assert.NotEqual(p1.Position, p2.Position);
+        var again = new ZoneSimulation(new ZoneOptions(), new RecordingOutbox());
+        Assert.Equal(p1.Position, again.Join(new ClientRef(1, 1), 1, "a").Position);
+        // Cross-checked against an independent implementation of the same mix.
+        Assert.Equal(new Position(-25_225, -4_635), p1.Position);
+        Assert.Equal(new Position(19_450, -6_115), p2.Position);
+    }
+}

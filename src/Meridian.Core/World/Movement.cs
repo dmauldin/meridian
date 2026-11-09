@@ -65,6 +65,10 @@ public static class Movement
     }
 
     /// <summary>Facing as a byte (0 = +Z, 64 = +X, 128 = −Z, 192 = −X), for compact snapshots.</summary>
+    /// <remarks>
+    /// Presentation only: uses floating-point atan2, so a value exactly on a rounding boundary
+    /// could differ between platforms. Nothing in the rules may depend on it.
+    /// </remarks>
     public static byte YawByte(int dirX, int dirZ, byte previous)
     {
         if (dirX == 0 && dirZ == 0)

@@ -133,8 +133,19 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         _metrics?.RecordBytesOut(packet.Length);
     }
 
-    public void OnPlayerJoin(NetPeer context, in PlayerJoin message) =>
-        Simulation.Join(new ClientRef(context.Id, message.ConnectionId), message.AccountId, message.Name ?? "?");
+    public void OnPlayerJoin(NetPeer context, in PlayerJoin message)
+    {
+        var client = new ClientRef(context.Id, message.ConnectionId);
+        try
+        {
+            Simulation.Join(client, message.AccountId, message.Name ?? "?");
+        }
+        catch (InvalidOperationException e)
+        {
+            // A gateway bug must not take the whole zone down.
+            _log($"rejected join for {client}: {e.Message}");
+        }
+    }
 
     public void OnPlayerLeave(NetPeer context, in PlayerLeave message) =>
         Simulation.Leave(new ClientRef(context.Id, message.ConnectionId));

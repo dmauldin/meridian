@@ -266,11 +266,17 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         where T : struct, IWireMessage<T> =>
         _outbox.Send(to.Client, T.Delivery, Envelope.Encode(_packet, message));
 
-    /// <summary>Spreads spawns over a 60 m square near the origin, deterministically.</summary>
+    /// <summary>
+    /// Spreads spawns over a 60 m square near the origin. Uses a fixed integer mix rather than
+    /// <see cref="HashCode"/>, which is randomized per process and would break replays.
+    /// </summary>
     private static Position SpawnPoint(ClientRef client)
     {
-        var h = (uint)HashCode.Combine(client.GatewayId, client.ConnectionId);
-        return new Position((int)(h % 60_000) - 30_000, (int)(h / 60_000 % 60_000) - 30_000);
+        var h = ((ulong)(uint)client.GatewayId << 32) | client.ConnectionId;
+        h = (h ^ (h >> 33)) * 0xFF51AFD7ED558CCDUL;
+        h = (h ^ (h >> 33)) * 0xC4CEB9FE1A85EC53UL;
+        h ^= h >> 33;
+        return new Position((int)(h % 60_000) - 30_000, (int)((h >> 32) % 60_000) - 30_000);
     }
 }
 
