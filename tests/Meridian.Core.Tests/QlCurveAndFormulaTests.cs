@@ -165,3 +165,41 @@ public class DeterministicRandomTests
         Assert.Throws<ArgumentOutOfRangeException>(() => rng.NextInt(2, 1));
     }
 }
+
+public class WeaponFormulaTests
+{
+    private static readonly Meridian.Core.Combat.WeaponProfile Rifle = new(
+        "Test Rifle", Meridian.Core.Stats.Stat.Rifle, Meridian.Core.Stats.Stat.RangedInit, Meridian.Core.Stats.Stat.EvadeRanged,
+        DamageType.Projectile, 10, 20, 1_500, 25_000);
+
+    [Fact]
+    public void Profile_overload_reads_the_right_stats()
+    {
+        var attacker = new Meridian.Core.Stats.StatBlock();
+        attacker.SetBase(Meridian.Core.Stats.Stat.Rifle, 600);
+        attacker.SetBase(Meridian.Core.Stats.Stat.AddDamage, 5);
+        attacker.SetBase(Meridian.Core.Stats.Stat.RangedInit, 250);
+        var defender = new Meridian.Core.Stats.StatBlock();
+        defender.SetBase(Meridian.Core.Stats.Stat.EvadeRanged, 500);
+        defender.SetBase(Meridian.Core.Stats.Stat.ProjectileAC, 800);
+
+        var viaProfile = new DeterministicRandom(9);
+        var viaRaw = new DeterministicRandom(9);
+        for (var i = 0; i < 200; i++)
+        {
+            Assert.Equal(
+                Formulas.ResolveAttack(viaRaw, 600, 500, 10, 20, 5, 0, 800),
+                Formulas.ResolveAttack(viaProfile, Rifle, attacker, defender));
+        }
+        Assert.Equal(1_000, Formulas.AttackTimeMs(Rifle, attacker));
+    }
+
+    [Fact]
+    public void Every_damage_type_maps_to_an_armor_stat()
+    {
+        foreach (var t in Enum.GetValues<DamageType>())
+        {
+            Assert.EndsWith("AC", Formulas.ArmorFor(t).ToString(), StringComparison.Ordinal);
+        }
+    }
+}

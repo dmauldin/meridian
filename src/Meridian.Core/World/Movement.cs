@@ -80,6 +80,35 @@ public static class Movement
         return (byte)((int)Math.Round(turns * 256) & 0xFF);
     }
 
+    /// <summary>
+    /// A unit direction (scaled by <see cref="DirectionScale"/>) from <paramref name="from"/> toward
+    /// <paramref name="to"/>, or (0, 0) if they coincide. Used by AI and server-side steering.
+    /// </summary>
+    public static (short X, short Z) DirectionTowards(Position from, Position to)
+    {
+        long dx = (long)to.X - from.X;
+        long dz = (long)to.Z - from.Z;
+        if (dx == 0 && dz == 0)
+        {
+            return (0, 0);
+        }
+        // Scale down first so the squares cannot overflow for far-apart points.
+        while (Math.Abs(dx) > 1_000_000_000 || Math.Abs(dz) > 1_000_000_000)
+        {
+            dx /= 2;
+            dz /= 2;
+        }
+        var length = ISqrt((dx * dx) + (dz * dz));
+        if (length == 0)
+        {
+            return (0, 0);
+        }
+        return ((short)(dx * DirectionScale / length), (short)(dz * DirectionScale / length));
+    }
+
+    /// <summary>Integer distance in millimetres.</summary>
+    public static int Distance(Position a, Position b) => (int)Math.Min(int.MaxValue, ISqrt(a.DistanceSquared(b)));
+
     private static long ISqrt(long n)
     {
         var r = (long)Math.Sqrt(n);
