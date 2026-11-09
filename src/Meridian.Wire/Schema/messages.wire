@@ -1,0 +1,110 @@
+# Meridian wire schema.
+#
+# Generated into ../Generated/Messages.g.cs by Meridian.Wire.Gen:
+#   dotnet run --project src/Meridian.Wire.Gen
+# A test fails if the generated file is out of date.
+#
+# Syntax
+#   struct <Name>                              a nested record, used inside messages
+#   message <id> <Name> <direction> <delivery> a top-level packet
+#     direction: server_bound | client_bound | internal | handshake
+#     delivery:  unreliable_sequenced | reliable_ordered | reliable_unordered
+#   fields, one per line:  <type> <name>
+#     u8 u16 u32 u64 i16 i32 i64 bool varu32 vari32
+#     string(<max bytes>)  bytes(<max bytes>)
+#     <StructName>         list<<StructName or primitive>>(<max count>)
+#   end
+#
+# Rules: message ids and field order are the wire format. Append; never reorder or reuse.
+# Positions are millimetres in zone space (i32). Directions are unit vectors scaled to ±32767.
+
+# ---------------------------------------------------------------- handshake
+
+# Sent as LiteNetLib connection-request data, before any session encryption.
+message 1 ConnectRequest handshake reliable_ordered
+  u64 schemaHash
+  bytes(256) ticket
+end
+
+# ---------------------------------------------------------------- client → server
+
+message 100 MoveIntent server_bound unreliable_sequenced
+  u32 sequence
+  i16 dirX
+  i16 dirZ
+  u8 flags
+end
+
+message 101 ChatSay server_bound reliable_unordered
+  string(256) text
+end
+
+message 102 Ping server_bound unreliable_sequenced
+  u32 clientTimeMs
+end
+
+# ---------------------------------------------------------------- server → client
+
+message 200 Welcome client_bound reliable_ordered
+  u32 entityId
+  u32 zoneId
+  u32 serverTick
+  u16 tickRateHz
+  i32 x
+  i32 z
+end
+
+struct EntityState
+  varu32 entityId
+  i32 x
+  i32 z
+  u8 yaw
+  u8 healthPercent
+end
+
+message 201 Snapshot client_bound unreliable_sequenced
+  u32 tick
+  u32 ackedInputSequence
+  list<EntityState>(64) entities
+  list<varu32>(64) removed
+end
+
+message 202 ChatMessage client_bound reliable_unordered
+  u32 fromEntityId
+  string(32) fromName
+  string(256) text
+end
+
+message 203 Pong client_bound unreliable_sequenced
+  u32 clientTimeMs
+  u32 serverTick
+end
+
+message 204 Disconnecting client_bound reliable_ordered
+  string(128) reason
+end
+
+# ---------------------------------------------------------------- gateway ↔ zone
+
+message 1000 PlayerJoin internal reliable_ordered
+  u32 connectionId
+  u64 accountId
+  string(32) name
+end
+
+message 1001 PlayerLeave internal reliable_ordered
+  u32 connectionId
+end
+
+# A client packet, already decrypted and shape-checked by the gateway.
+message 1002 FromClient internal reliable_ordered
+  u32 connectionId
+  bytes(1400) payload
+end
+
+# A packet for one client; the gateway seals it and sends it with the given delivery.
+message 1003 ToClient internal reliable_ordered
+  u32 connectionId
+  u8 deliveryMode
+  bytes(16000) payload
+end
