@@ -316,6 +316,14 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         public void OnPing(int context, in Ping message)
         {
         }
+
+        public void OnSetTarget(int context, in SetTarget message)
+        {
+        }
+
+        public void OnSetAttack(int context, in SetAttack message)
+        {
+        }
     }
 }
 

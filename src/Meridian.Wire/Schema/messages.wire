@@ -43,6 +43,16 @@ message 102 Ping server_bound unreliable_sequenced
   u32 clientTimeMs
 end
 
+# 0 clears the target.
+message 103 SetTarget server_bound reliable_ordered
+  varu32 entityId
+end
+
+# Auto-attack the current target while enabled.
+message 104 SetAttack server_bound reliable_ordered
+  bool enabled
+end
+
 # ---------------------------------------------------------------- server → client
 
 message 200 Welcome client_bound reliable_ordered
@@ -54,12 +64,14 @@ message 200 Welcome client_bound reliable_ordered
   i32 z
 end
 
+# flags: bit 0 = dead, bit 1 = in combat.
 struct EntityState
   varu32 entityId
   i32 x
   i32 z
   u8 yaw
   u8 healthPercent
+  u8 flags
 end
 
 message 201 Snapshot client_bound unreliable_sequenced
@@ -82,6 +94,44 @@ end
 
 message 204 Disconnecting client_bound reliable_ordered
   string(128) reason
+end
+
+# Sent when an entity enters the viewer's interest set; snapshots then carry only state.
+# kind: 1 = player, 2 = mob. templateId selects the model/appearance for mobs.
+message 205 EntityInfo client_bound reliable_ordered
+  varu32 entityId
+  u8 kind
+  u16 templateId
+  string(32) name
+  u16 level
+end
+
+# outcome: 0 = miss, 1 = hit, 2 = critical.
+message 206 CombatEvent client_bound reliable_ordered
+  varu32 attackerId
+  varu32 targetId
+  u8 outcome
+  varu32 damage
+end
+
+message 207 EntityDied client_bound reliable_ordered
+  varu32 entityId
+  varu32 killerId
+end
+
+# The receiving player's own exact state. Sent when any field changes.
+message 208 SelfStatus client_bound reliable_ordered
+  i32 health
+  i32 maxHealth
+  varu32 targetId
+  bool attacking
+  bool dead
+end
+
+# The receiving player was moved by the server (respawn); snap, don't interpolate.
+message 209 Respawned client_bound reliable_ordered
+  i32 x
+  i32 z
 end
 
 # ---------------------------------------------------------------- gateway ↔ zone

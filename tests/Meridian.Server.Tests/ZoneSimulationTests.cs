@@ -29,8 +29,9 @@ public class ZoneSimulationTests
 
     private static (ZoneSimulation Sim, RecordingOutbox Out) NewZone(ZoneOptions? options = null)
     {
+        // These tests are about players; combat tests add mobs explicitly.
         var outbox = new RecordingOutbox();
-        return (new ZoneSimulation(options ?? new ZoneOptions(), outbox), outbox);
+        return (new ZoneSimulation(options ?? new ZoneOptions { MobCount = 0 }, outbox), outbox);
     }
 
     private static void Send<T>(ZoneSimulation sim, ClientRef from, in T message)
@@ -87,7 +88,7 @@ public class ZoneSimulationTests
     [Fact]
     public void Player_stops_when_intents_stop_arriving()
     {
-        var (sim, _) = NewZone(new ZoneOptions { IntentTimeoutTicks = 3 });
+        var (sim, _) = NewZone(new ZoneOptions { MobCount = 0, IntentTimeoutTicks = 3 });
         var p = sim.Join(A, 1, "a");
         Send(sim, A, new MoveIntent { Sequence = 1, DirZ = Movement.DirectionScale });
         for (var i = 0; i < 10; i++)
@@ -131,7 +132,7 @@ public class ZoneSimulationTests
     [Fact]
     public void Entities_outside_the_interest_radius_are_not_sent_and_leaving_view_is_reported()
     {
-        var (sim, outbox) = NewZone(new ZoneOptions { InterestRadiusMm = 10_000, IntentTimeoutTicks = 1_000 });
+        var (sim, outbox) = NewZone(new ZoneOptions { MobCount = 0, InterestRadiusMm = 10_000, IntentTimeoutTicks = 1_000 });
         var a = sim.Join(A, 1, "a");
         var b = sim.Join(B, 2, "b");
         a.Position = new Position(0, 0);
@@ -155,7 +156,7 @@ public class ZoneSimulationTests
     [Fact]
     public void Snapshot_is_capped_to_the_nearest_entities()
     {
-        var (sim, outbox) = NewZone(new ZoneOptions { MaxEntitiesPerSnapshot = 3 });
+        var (sim, outbox) = NewZone(new ZoneOptions { MobCount = 0, MaxEntitiesPerSnapshot = 3 });
         var players = Enumerable.Range(1, 6).Select(i => sim.Join(new ClientRef(1, (uint)i), (ulong)i, $"p{i}")).ToList();
         for (var i = 0; i < players.Count; i++)
         {
@@ -185,7 +186,7 @@ public class ZoneSimulationTests
     [Fact]
     public void Chat_reaches_players_in_range_only()
     {
-        var (sim, outbox) = NewZone(new ZoneOptions { ChatRadiusMm = 10_000 });
+        var (sim, outbox) = NewZone(new ZoneOptions { MobCount = 0, ChatRadiusMm = 10_000 });
         var a = sim.Join(A, 1, "Ýrsa");
         var b = sim.Join(B, 2, "b");
         var c = sim.Join(new ClientRef(1, 3), 3, "c");
@@ -256,11 +257,11 @@ public class ZoneDeterminismTests
     public void Spawn_points_are_identical_across_runs()
     {
         // Golden values: these must not depend on per-process hash seeds.
-        var sim = new ZoneSimulation(new ZoneOptions(), new RecordingOutbox());
+        var sim = new ZoneSimulation(new ZoneOptions { MobCount = 0 }, new RecordingOutbox());
         var p1 = sim.Join(new ClientRef(1, 1), 1, "a");
         var p2 = sim.Join(new ClientRef(1, 2), 2, "b");
         Assert.NotEqual(p1.Position, p2.Position);
-        var again = new ZoneSimulation(new ZoneOptions(), new RecordingOutbox());
+        var again = new ZoneSimulation(new ZoneOptions { MobCount = 0 }, new RecordingOutbox());
         Assert.Equal(p1.Position, again.Join(new ClientRef(1, 1), 1, "a").Position);
         // Cross-checked against an independent implementation of the same mix.
         Assert.Equal(new Position(-25_225, -4_635), p1.Position);

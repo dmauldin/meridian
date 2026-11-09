@@ -1,5 +1,5 @@
 using Meridian.Core.Characters;
-using Meridian.Core.Stats;
+using Meridian.Core.Randomness;
 using Meridian.Core.World;
 using Meridian.Wire;
 
@@ -17,6 +17,9 @@ public interface IZoneOutbox
 public sealed record ZoneOptions
 {
     public uint ZoneId { get; init; } = 1;
+
+    /// <summary>Seeds combat rolls and mob placement. Same seed + same inputs = same outcome.</summary>
+    public ulong Seed { get; init; } = 0x4D45524944494E;
 
     public int TickRateHz { get; init; } = 20;
 
@@ -36,6 +39,19 @@ public sealed record ZoneOptions
     /// <summary>Movement intents older than this many ticks without a refresh stop the player.</summary>
     public int IntentTimeoutTicks { get; init; } = 10;
 
+    /// <summary>Skitters scattered in a ring around the spawn area.</summary>
+    public int MobCount { get; init; } = 40;
+
+    /// <summary>Mob spawns fall between these distances from the origin.</summary>
+    public int MobRingInnerMm { get; init; } = 40_000;
+
+    public int MobRingOuterMm { get; init; } = 120_000;
+
+    public int PlayerRespawnTicks { get; init; } = 100;
+
+    /// <summary>The "in combat" flag stays set this long after the last hit.</summary>
+    public int CombatFlagTicks { get; init; } = 100;
+
     public int TickMs => 1_000 / TickRateHz;
 }
 
@@ -44,18 +60,27 @@ public sealed record ZoneOptions
 /// time in fixed ticks and writes packets to an <see cref="IZoneOutbox"/>. No sockets, so tests
 /// can drive it directly.
 /// </summary>
-public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
+/// <remarks>
+/// Tick order: player respawns, mob AI, movement, combat, status updates, snapshots. Entities are
+/// processed in a stable order (join/spawn order) so a seeded zone replays identically.
+/// </remarks>
+public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 {
     private readonly ZoneOptions _options;
     private readonly IZoneOutbox _outbox;
+    private readonly DeterministicRandom _rng;
     private readonly Dictionary<ClientRef, Player> _byClient = [];
+    private readonly Dictionary<uint, Entity> _byId = [];
+    private readonly List<Entity> _entities = [];
     private readonly List<Player> _players = [];
+    private readonly List<Mob> _mobs = [];
     private readonly SpatialGrid _grid;
     private readonly byte[] _packet = new byte[Envelope.MaxPacketBytes];
     private readonly List<int> _candidates = [];
-    private readonly List<(long Distance, Player Player)> _visible = [];
+    private readonly List<(long Distance, Entity Entity)> _visible = [];
     private readonly HashSet<uint> _visibleIds = [];
     private uint _nextEntityId = 1;
+    private uint _gridTick = uint.MaxValue;
 
     public ZoneSimulation(ZoneOptions options, IZoneOutbox outbox)
     {
@@ -63,7 +88,9 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         ArgumentNullException.ThrowIfNull(outbox);
         _options = options;
         _outbox = outbox;
+        _rng = new DeterministicRandom(options.Seed);
         _grid = new SpatialGrid(options.GridCellMm);
+        SpawnMobs();
     }
 
     public uint Tick { get; private set; }
@@ -71,6 +98,10 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
     public int PlayerCount => _players.Count;
 
     public IReadOnlyList<Player> Players => _players;
+
+    public IReadOnlyList<Mob> Mobs => _mobs;
+
+    public Entity? Find(uint entityId) => _byId.GetValueOrDefault(entityId);
 
     /// <summary>Adds a player at a spawn point and sends them <see cref="Welcome"/>.</summary>
     public Player Join(ClientRef client, ulong accountId, string name)
@@ -80,8 +111,7 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
             throw new InvalidOperationException($"{client} already joined.");
         }
         var character = new Character(Profession.Operative, Origin.Baseline);
-        character.Stats.SetBase(Stat.Level, 1);
-        character.Stats.SetBase(Stat.RunSpeed, 5_000); // mm/s; a stat so buffs can change it later
+        StarterContent.ApplyNewPlayerStats(character.Stats);
 
         var player = new Player(_nextEntityId++, client, accountId, name, character)
         {
@@ -89,6 +119,7 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         };
         _byClient.Add(client, player);
         _players.Add(player);
+        Add(player);
 
         Send(player, new Welcome
         {
@@ -99,6 +130,7 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
             X = player.Position.X,
             Z = player.Position.Z,
         });
+        SendStatusIfChanged(player);
         return player;
     }
 
@@ -109,6 +141,12 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
             return false;
         }
         _players.Remove(player);
+        _entities.Remove(player);
+        _byId.Remove(player.EntityId);
+        foreach (var mob in _mobs)
+        {
+            mob.Threat.Remove(player.EntityId);
+        }
         return true;
     }
 
@@ -133,23 +171,18 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         }
     }
 
-    /// <summary>Advances the simulation one fixed step and sends snapshots when due.</summary>
+    /// <summary>Advances the simulation one fixed step and sends updates.</summary>
     public void Step()
     {
         Tick++;
-        var dt = _options.TickMs;
+        RespawnPlayers();
+        StepMobs();
+        MoveEntities();
+        StepCombat();
 
-        _grid.Clear();
-        for (var i = 0; i < _players.Count; i++)
+        foreach (var p in _players)
         {
-            var p = _players[i];
-            if (Tick - p.IntentTick > _options.IntentTimeoutTicks)
-            {
-                p.DirX = p.DirZ = 0; // client went quiet: stop rather than run forever
-            }
-            p.Position = Movement.Step(p.Position, p.DirX, p.DirZ, p.Character.Get(Stat.RunSpeed), dt, _options.Bounds);
-            p.Yaw = Movement.YawByte(p.DirX, p.DirZ, p.Yaw);
-            _grid.Insert(i, p.Position);
+            SendStatusIfChanged(p);
         }
 
         // Stagger snapshots across ticks (by entity id) so the cost is spread evenly instead of
@@ -164,6 +197,8 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         }
     }
 
+    // ------------------------------------------------------------------ intents
+
     public void OnMoveIntent(ClientRef context, in MoveIntent message)
     {
         var p = _byClient[context];
@@ -173,6 +208,10 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
             return;
         }
         p.LastInputSequence = message.Sequence;
+        if (p.Dead)
+        {
+            return;
+        }
         p.DirX = message.DirX;
         p.DirZ = message.DirZ;
         p.IntentTick = Tick;
@@ -187,52 +226,116 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
             return;
         }
         var chat = new ChatMessage { FromEntityId = speaker.EntityId, FromName = speaker.Name, Text = text };
-        var packet = Envelope.Encode(_packet, chat);
-        var r2 = (long)_options.ChatRadiusMm * _options.ChatRadiusMm;
-        foreach (var p in _players)
-        {
-            if (p.Position.DistanceSquared(speaker.Position) <= r2)
-            {
-                _outbox.Send(p.Client, Delivery.ReliableUnordered, packet);
-            }
-        }
+        Broadcast(speaker.Position, _options.ChatRadiusMm, chat);
     }
 
     public void OnPing(ClientRef context, in Ping message) =>
         Send(_byClient[context], new Pong { ClientTimeMs = message.ClientTimeMs, ServerTick = Tick });
 
+    public void OnSetTarget(ClientRef context, in SetTarget message)
+    {
+        var p = _byClient[context];
+        var target = message.EntityId == 0 ? null : Find(message.EntityId);
+        p.TargetId = target is null || target == p ? 0 : target.EntityId;
+        if (p.TargetId == 0)
+        {
+            p.Attacking = false;
+        }
+    }
+
+    public void OnSetAttack(ClientRef context, in SetAttack message)
+    {
+        var p = _byClient[context];
+        p.Attacking = message.Enabled && !p.Dead && Find(p.TargetId) is Mob { Dead: false };
+    }
+
+    // ------------------------------------------------------------------ movement
+
+    private void MoveEntities()
+    {
+        var dt = _options.TickMs;
+        foreach (var e in _entities)
+        {
+            if (e is Player p && Tick - p.IntentTick > _options.IntentTimeoutTicks)
+            {
+                p.DirX = p.DirZ = 0; // client went quiet: stop rather than run forever
+            }
+            if (e.Dead)
+            {
+                continue;
+            }
+            e.Position = Movement.Step(e.Position, e.DirX, e.DirZ, e.CurrentSpeed, dt, _options.Bounds);
+            e.Yaw = Movement.YawByte(e.DirX, e.DirZ, e.Yaw);
+        }
+    }
+
+    // ------------------------------------------------------------------ status, snapshots
+
+    private void SendStatusIfChanged(Player p)
+    {
+        var key = new SelfStatusKey(p.Health, p.MaxHealth, p.TargetId, p.Attacking, p.Dead);
+        if (p.LastSentStatus == key)
+        {
+            return;
+        }
+        p.LastSentStatus = key;
+        Send(p, new SelfStatus
+        {
+            Health = p.Health,
+            MaxHealth = p.MaxHealth,
+            TargetId = p.TargetId,
+            Attacking = p.Attacking,
+            Dead = p.Dead,
+        });
+    }
+
     private void SendSnapshot(Player viewer)
     {
-        // Gather nearby entities, nearest first, capped by the per-snapshot budget.
+        // Rebuilding per snapshot is wasteful but simple; profiling at M0 scale says it's cheap.
+        RebuildGridIfStale();
+
         _candidates.Clear();
         _grid.Query(viewer.Position, _options.InterestRadiusMm, _candidates);
         _visible.Clear();
         var r2 = (long)_options.InterestRadiusMm * _options.InterestRadiusMm;
         foreach (var index in _candidates)
         {
-            var other = _players[index];
+            var other = _entities[index];
             var d = other.Position.DistanceSquared(viewer.Position);
             if (d <= r2)
             {
                 _visible.Add((d, other));
             }
         }
-        _visible.Sort(static (a, b) => a.Distance != b.Distance ? a.Distance.CompareTo(b.Distance) : a.Player.EntityId.CompareTo(b.Player.EntityId));
+        _visible.Sort(static (a, b) => a.Distance != b.Distance ? a.Distance.CompareTo(b.Distance) : a.Entity.EntityId.CompareTo(b.Entity.EntityId));
         var count = Math.Min(_visible.Count, _options.MaxEntitiesPerSnapshot);
 
         var entities = new EntityState[count];
         _visibleIds.Clear();
         for (var i = 0; i < count; i++)
         {
-            var e = _visible[i].Player;
+            var e = _visible[i].Entity;
             _visibleIds.Add(e.EntityId);
+            if (!viewer.LastVisible.Contains(e.EntityId))
+            {
+                // First sight: names and appearance go once, reliably.
+                Send(viewer, new EntityInfo
+                {
+                    EntityId = e.EntityId,
+                    Kind = (byte)e.Kind,
+                    TemplateId = e is Mob m ? m.Template.Id : (ushort)0,
+                    Name = e.Name,
+                    Level = (ushort)e.Level,
+                });
+            }
             entities[i] = new EntityState
             {
                 EntityId = e.EntityId,
                 X = e.Position.X,
                 Z = e.Position.Z,
                 Yaw = e.Yaw,
-                HealthPercent = 100,
+                HealthPercent = e.HealthPercent,
+                Flags = (byte)((e.Dead ? 1 : 0) | (InCombat(e) ? 2 : 0)),
             };
         }
 
@@ -262,9 +365,48 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         });
     }
 
+    private void RebuildGridIfStale()
+    {
+        if (_gridTick == Tick)
+        {
+            return;
+        }
+        _gridTick = Tick;
+        _grid.Clear();
+        for (var i = 0; i < _entities.Count; i++)
+        {
+            _grid.Insert(i, _entities[i].Position);
+        }
+    }
+
+    private bool InCombat(Entity e) => e.LastCombatTick != 0 && Tick - e.LastCombatTick < _options.CombatFlagTicks;
+
+    // ------------------------------------------------------------------ plumbing
+
+    private void Add(Entity e)
+    {
+        _entities.Add(e);
+        _byId.Add(e.EntityId, e);
+    }
+
     private void Send<T>(Player to, in T message)
         where T : struct, IWireMessage<T> =>
         _outbox.Send(to.Client, T.Delivery, Envelope.Encode(_packet, message));
+
+    /// <summary>Sends to every player within <paramref name="radiusMm"/> of <paramref name="center"/>.</summary>
+    private void Broadcast<T>(Position center, int radiusMm, in T message)
+        where T : struct, IWireMessage<T>
+    {
+        var packet = Envelope.Encode(_packet, message);
+        var r2 = (long)radiusMm * radiusMm;
+        foreach (var p in _players)
+        {
+            if (p.Position.DistanceSquared(center) <= r2)
+            {
+                _outbox.Send(p.Client, T.Delivery, packet);
+            }
+        }
+    }
 
     /// <summary>
     /// Spreads spawns over a 60 m square near the origin. Uses a fixed integer mix rather than
@@ -278,32 +420,4 @@ public sealed class ZoneSimulation : IServerBoundHandler<ClientRef>
         h ^= h >> 33;
         return new Position((int)(h % 60_000) - 30_000, (int)((h >> 32) % 60_000) - 30_000);
     }
-}
-
-/// <summary>A connected player's simulation state.</summary>
-public sealed class Player(uint entityId, ClientRef client, ulong accountId, string name, Character character)
-{
-    public uint EntityId { get; } = entityId;
-
-    public ClientRef Client { get; } = client;
-
-    public ulong AccountId { get; } = accountId;
-
-    public string Name { get; } = name;
-
-    public Character Character { get; } = character;
-
-    public Position Position { get; set; }
-
-    public byte Yaw { get; set; }
-
-    public short DirX { get; set; }
-
-    public short DirZ { get; set; }
-
-    public uint LastInputSequence { get; set; }
-
-    public uint IntentTick { get; set; }
-
-    internal HashSet<uint> LastVisible { get; } = [];
 }
