@@ -1,0 +1,28 @@
+# Local stack: docker compose -f deploy/docker-compose.yml up --build
+# Secrets come from deploy/.env (copy deploy/.env.example). Never commit real keys.
+name: meridian
+
+services:
+  zone:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: zone }
+    environment:
+      MERIDIAN_INTERNAL_KEY: ${MERIDIAN_INTERNAL_KEY:?set in deploy/.env}
+    # Not published: only the gateway talks to the zone.
+    expose: ["7800/udp"]
+
+  gateway:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: gateway }
+    environment:
+      MERIDIAN_ZONE_HOST: zone
+      MERIDIAN_INTERNAL_KEY: ${MERIDIAN_INTERNAL_KEY:?set in deploy/.env}
+      MERIDIAN_TICKET_KEY: ${MERIDIAN_TICKET_KEY:?set in deploy/.env}
+    ports: ["7777:7777/udp"]
+    depends_on: [zone]
+
+  auth:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: auth }
+    environment:
+      MERIDIAN_TICKET_KEY: ${MERIDIAN_TICKET_KEY:?set in deploy/.env}
+      MERIDIAN_PUBLIC_GATEWAY_HOST: ${MERIDIAN_PUBLIC_GATEWAY_HOST:-127.0.0.1}
+      MERIDIAN_DEV_PASSWORD: ${MERIDIAN_DEV_PASSWORD:-dev}
+    ports: ["5080:5080/tcp"]
