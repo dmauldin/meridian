@@ -5,11 +5,15 @@
 #   - every bot connected and received snapshots at >= 8 Hz (10 Hz nominal)
 #   - the zone held >= 19.5 Hz with p99 tick work under 5 ms and no overruns
 #
-# Usage: scripts/m0-gate.sh [bots=100] [seconds=60]
+# Usage: scripts/m0-gate.sh [bots=100] [seconds=60] [wander|hunt]
+#   hunt: bots fight the zone's mobs instead of wandering (combat load).
 set -euo pipefail
 
 BOTS="${1:-100}"
 SECONDS_TO_RUN="${2:-60}"
+MODE="${3:-wander}"
+BOT_FLAGS=()
+if [[ "$MODE" == "hunt" ]]; then BOT_FLAGS+=(--hunt); fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/artifacts/m0-gate"
 BIN="bin/Release/net10.0"
@@ -38,9 +42,9 @@ for _ in $(seq 1 60); do
 done
 grep -q "connected to zone" "$OUT/gateway.log" || { echo "gateway never reached the zone"; tail "$OUT"/*.log; exit 1; }
 
-echo "running $BOTS bots for ${SECONDS_TO_RUN}s..."
+echo "running $BOTS bots ($MODE) for ${SECONDS_TO_RUN}s..."
 set +e
-dotnet "$ROOT/src/Meridian.Bots/$BIN/Meridian.Bots.dll" --count "$BOTS" --duration "$SECONDS_TO_RUN" | tee "$OUT/bots.log"
+dotnet "$ROOT/src/Meridian.Bots/$BIN/Meridian.Bots.dll" --count "$BOTS" --duration "$SECONDS_TO_RUN" "${BOT_FLAGS[@]}" | tee "$OUT/bots.log"
 bots_exit=${PIPESTATUS[0]}
 set -e
 
