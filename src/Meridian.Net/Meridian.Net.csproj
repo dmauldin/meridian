@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="LiteNetLib" />
+    <ProjectReference Include="../Meridian.Wire/Meridian.Wire.csproj" />
+  </ItemGroup>
+</Project>

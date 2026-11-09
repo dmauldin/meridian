@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Meridian.Core/Meridian.Core.csproj" />
+    <Project Path="src/Meridian.Net/Meridian.Net.csproj" />
     <Project Path="src/Meridian.Wire/Meridian.Wire.csproj" />
     <Project Path="src/Meridian.Wire.Gen/Meridian.Wire.Gen.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj" />
+    <Project Path="tests/Meridian.Net.Tests/Meridian.Net.Tests.csproj" />
     <Project Path="tests/Meridian.Wire.Tests/Meridian.Wire.Tests.csproj" />
   </Folder>
 </Solution>
