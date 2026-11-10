@@ -273,7 +273,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
     private void SendStatusIfChanged(Player p)
     {
-        var key = new SelfStatusKey(p.Health, p.MaxHealth, p.TargetId, p.Attacking, p.Dead);
+        var key = new SelfStatusKey(p.Health, p.MaxHealth, p.TargetId, p.Attacking, p.Dead, p.CurrentSpeed);
         if (p.LastSentStatus == key)
         {
             return;
@@ -286,6 +286,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             TargetId = p.TargetId,
             Attacking = p.Attacking,
             Dead = p.Dead,
+            RunSpeed = p.CurrentSpeed,
         });
     }
 

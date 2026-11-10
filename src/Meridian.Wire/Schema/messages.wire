@@ -120,12 +120,14 @@ message 207 EntityDied client_bound reliable_ordered
 end
 
 # The receiving player's own exact state. Sent when any field changes.
+# runSpeed (mm/s) lets the client predict its own movement with the server's numbers.
 message 208 SelfStatus client_bound reliable_ordered
   i32 health
   i32 maxHealth
   varu32 targetId
   bool attacking
   bool dead
+  i32 runSpeed
 end
 
 # The receiving player was moved by the server (respawn); snap, don't interpolate.

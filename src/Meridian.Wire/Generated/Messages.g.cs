@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0xECAF9EDA114FBB61UL;
+    public const ulong Hash = 0x2A565AA0364AC334UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -531,6 +531,8 @@ public partial struct SelfStatus : IWireMessage<SelfStatus>
 
     public bool Dead;
 
+    public int RunSpeed;
+
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteI32(Health);
@@ -538,6 +540,7 @@ public partial struct SelfStatus : IWireMessage<SelfStatus>
         writer.WriteVarU32(TargetId);
         writer.WriteBool(Attacking);
         writer.WriteBool(Dead);
+        writer.WriteI32(RunSpeed);
     }
 
     public static SelfStatus Read(ref WireReader reader)
@@ -548,6 +551,7 @@ public partial struct SelfStatus : IWireMessage<SelfStatus>
         value.TargetId = reader.ReadVarU32();
         value.Attacking = reader.ReadBool();
         value.Dead = reader.ReadBool();
+        value.RunSpeed = reader.ReadI32();
         return value;
     }
 }

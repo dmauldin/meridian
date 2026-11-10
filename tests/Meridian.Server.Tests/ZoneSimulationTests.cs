@@ -49,6 +49,16 @@ public class ZoneSimulationTests
     }
 
     [Fact]
+    public void Joining_sends_self_status_with_run_speed_for_prediction()
+    {
+        var (sim, outbox) = NewZone();
+        var p = sim.Join(A, 1, "a");
+        var status = outbox.Last<SelfStatus>(A);
+        Assert.Equal(5_000, status.RunSpeed);
+        Assert.Equal(p.MaxHealth, status.Health);
+    }
+
+    [Fact]
     public void Joining_twice_is_rejected()
     {
         var (sim, _) = NewZone();
