@@ -52,3 +52,34 @@ public class MovementTests
         Assert.Equal(expected, Movement.YawByte(x, z, 0));
     }
 }
+
+public class SteeringTests
+{
+    [Fact]
+    public void Direction_towards_is_unit_length_and_points_the_right_way()
+    {
+        var (x, z) = Movement.DirectionTowards(new Position(0, 0), new Position(3_000, 4_000));
+        Assert.InRange(x, 19_658, 19_662); // 0.6 * 32767
+        Assert.InRange(z, 26_211, 26_215); // 0.8 * 32767
+    }
+
+    [Fact]
+    public void Direction_towards_self_is_zero()
+    {
+        Assert.Equal((0, 0), Movement.DirectionTowards(new Position(5, 5), new Position(5, 5)));
+    }
+
+    [Fact]
+    public void Direction_towards_handles_extreme_distances()
+    {
+        var (x, z) = Movement.DirectionTowards(new Position(int.MinValue, 0), new Position(int.MaxValue, 0));
+        Assert.Equal((short)Movement.DirectionScale, x);
+        Assert.Equal(0, z);
+    }
+
+    [Fact]
+    public void Distance_is_exact_for_integer_triangles()
+    {
+        Assert.Equal(5_000, Movement.Distance(new Position(0, 0), new Position(3_000, 4_000)));
+    }
+}

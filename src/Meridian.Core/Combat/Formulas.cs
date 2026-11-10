@@ -1,4 +1,5 @@
 using Meridian.Core.Randomness;
+using Meridian.Core.Stats;
 
 namespace Meridian.Core.Combat;
 
@@ -66,6 +67,59 @@ public static class Formulas
     {
         var reduced = baseTimeMs - (2L * Math.Max(0, initiative));
         return (int)Math.Max(baseTimeMs / 2, reduced);
+    }
+
+    /// <summary>
+    /// Threat an attack adds against its target: the damage dealt, scaled by the attacker's
+    /// <see cref="Stat.ThreatModifier"/> (basis points, either direction, floored at zero).
+    /// A miss counts as 1 damage so an attacker who never lands a hit still draws attention.
+    /// </summary>
+    public static long Threat(int damageDealt, int threatModifierBp)
+    {
+        var factor = Math.Max(0L, 10_000L + threatModifierBp);
+        return Math.Max(1, damageDealt) * factor / 10_000;
+    }
+
+    /// <summary>The armor-class stat that mitigates <paramref name="type"/>.</summary>
+    public static Stat ArmorFor(DamageType type) => type switch
+    {
+        DamageType.Projectile => Stat.ProjectileAC,
+        DamageType.Melee => Stat.MeleeAC,
+        DamageType.Energy => Stat.EnergyAC,
+        DamageType.Chemical => Stat.ChemicalAC,
+        DamageType.Radiation => Stat.RadiationAC,
+        DamageType.Cold => Stat.ColdAC,
+        DamageType.Fire => Stat.FireAC,
+        DamageType.Poison => Stat.PoisonAC,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+    };
+
+    /// <summary>
+    /// Resolves an attack between two stat readers using <paramref name="weapon"/>: attack skill vs.
+    /// defence skill, weapon damage plus AddDamage, attacker's crit chance, defender's armor.
+    /// </summary>
+    public static AttackOutcome ResolveAttack(DeterministicRandom rng, WeaponProfile weapon, IStatReader attacker, IStatReader defender)
+    {
+        ArgumentNullException.ThrowIfNull(weapon);
+        ArgumentNullException.ThrowIfNull(attacker);
+        ArgumentNullException.ThrowIfNull(defender);
+        return ResolveAttack(
+            rng,
+            attacker.Get(weapon.AttackSkill),
+            defender.Get(weapon.DefenceSkill),
+            weapon.MinDamage,
+            weapon.MaxDamage,
+            attacker.Get(Stat.AddDamage),
+            attacker.Get(Stat.CritChance),
+            defender.Get(weapon.ArmorStat));
+    }
+
+    /// <summary>Attack interval for <paramref name="weapon"/> given the attacker's initiative.</summary>
+    public static int AttackTimeMs(WeaponProfile weapon, IStatReader attacker)
+    {
+        ArgumentNullException.ThrowIfNull(weapon);
+        ArgumentNullException.ThrowIfNull(attacker);
+        return ActionTimeMs(weapon.BaseAttackTimeMs, attacker.Get(weapon.InitiativeSkill));
     }
 
     /// <summary>

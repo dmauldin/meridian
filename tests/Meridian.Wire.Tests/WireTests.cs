@@ -111,7 +111,7 @@ public class RoundTripTests
         // A small entity id costs one byte; the rest is fixed. Keeps 64 entities well under the MTU.
         var bytes = Envelope.ToArray(new Snapshot { Entities = [new EntityState { EntityId = 5 }] });
         const int header = 2 + 4 + 4 + 1 + 1; // id, tick, ack, count, removed count
-        Assert.Equal(header + 1 + 4 + 4 + 1 + 1, bytes.Length);
+        Assert.Equal(header + 1 + 4 + 4 + 1 + 1 + 1, bytes.Length); // id, x, z, yaw, health, flags
     }
 
     [Theory]
@@ -156,6 +156,10 @@ public class HostileInputTests
         public void OnChatSay(int context, in ChatSay message) => Calls.Add($"say {message.Text}");
 
         public void OnPing(int context, in Ping message) => Calls.Add("ping");
+
+        public void OnSetTarget(int context, in SetTarget message) => Calls.Add($"target {message.EntityId}");
+
+        public void OnSetAttack(int context, in SetAttack message) => Calls.Add($"attack {message.Enabled}");
     }
 
     [Fact]

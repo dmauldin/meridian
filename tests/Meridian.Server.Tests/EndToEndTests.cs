@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using Meridian.Core.World;
 using Meridian.Net;
 using Meridian.Net.Client;
 using Meridian.Server.Auth;
@@ -72,9 +73,52 @@ public sealed class EndToEndTests : IDisposable
         using var ca = Connect(a, "alice");
         using var cb = Connect(b, "bob");
 
-        Pump([ca, cb], () => a.Snapshots.LastOrDefault().Entities?.Length == 2, "a to see b");
+        Pump([ca, cb], () => b.Welcome is not null && a.Snapshots.LastOrDefault().Entities?.Any(e => e.EntityId == b.Welcome.Value.EntityId) == true, "a to see b");
+        Assert.Equal("bob", a.Info[b.Welcome!.Value.EntityId].Name);
         ca.Send(new ChatSay { Text = "hello bob" });
         Pump([ca, cb], () => b.Chat.Contains("alice: hello bob"), "b to hear a");
+    }
+
+    /// <summary>The M1 gate: two players kill a mob together over the network.</summary>
+    [Fact]
+    public void Two_players_kill_a_mob_together_over_the_network()
+    {
+        var a = new TestClient();
+        var b = new TestClient();
+        using var ca = Connect(a, "hunterA");
+        using var cb = Connect(b, "hunterB");
+        Pump([ca, cb], () => a.Welcome is not null && b.Welcome is not null && a.Snapshots.Count > 0, "both in world");
+
+        // Both pick the mob nearest to player A, so they fight the same one.
+        var mobId = a.Info.Values.Where(i => i.Kind == 2)
+            .Select(i => i.EntityId)
+            .OrderBy(id => a.DistanceTo(id))
+            .First();
+        foreach (var conn in new[] { ca, cb })
+        {
+            conn.Send(new SetTarget { EntityId = mobId });
+        }
+
+        uint seq = 0;
+        Pump([ca, cb], () =>
+        {
+            foreach (var (client, conn) in new[] { (a, ca), (b, cb) })
+            {
+                var (dx, dz) = client.DistanceTo(mobId) > 18_000 ? client.DirectionTo(mobId) : ((short)0, (short)0);
+                conn.Send(new MoveIntent { Sequence = ++seq, DirX = dx, DirZ = dz });
+                if (client.Status is { Attacking: false } && !client.Deaths.Any(d => d.EntityId == mobId))
+                {
+                    conn.Send(new SetAttack { Enabled = true });
+                }
+            }
+            return a.Deaths.Any(d => d.EntityId == mobId);
+        }, "the mob to die", seconds: 90);
+
+        var aId = a.Welcome!.Value.EntityId;
+        var bId = b.Welcome!.Value.EntityId;
+        Assert.Contains(a.Combat, e => e.AttackerId == aId && e.TargetId == mobId && e.Outcome != 0);
+        Assert.Contains(a.Combat, e => e.AttackerId == bId && e.TargetId == mobId && e.Outcome != 0);
+        Assert.Contains(a.Deaths.Single(d => d.EntityId == mobId).KillerId, new[] { aId, bId });
     }
 
     [Fact]
@@ -143,9 +187,9 @@ public sealed class EndToEndTests : IDisposable
 
     private static void Pump(GameConnection conn, Func<bool> done, string what) => Pump([conn], done, what);
 
-    private static void Pump(GameConnection[] conns, Func<bool> done, string what)
+    private static void Pump(GameConnection[] conns, Func<bool> done, string what, int seconds = 10)
     {
-        var deadline = Stopwatch.GetTimestamp() + (10 * Stopwatch.Frequency);
+        var deadline = Stopwatch.GetTimestamp() + (seconds * Stopwatch.Frequency);
         while (!done())
         {
             Assert.True(Stopwatch.GetTimestamp() < deadline, $"timed out waiting for {what}");
@@ -186,6 +230,47 @@ public sealed class EndToEndTests : IDisposable
         }
 
         public void OnDisconnecting(GameConnection context, in Disconnecting message)
+        {
+        }
+
+        public Dictionary<uint, EntityInfo> Info { get; } = [];
+
+        private Position Self => Find(Welcome!.Value.EntityId);
+
+        public long DistanceTo(uint id) => Movement.Distance(Self, Find(id));
+
+        public (short X, short Z) DirectionTo(uint id) => Movement.DirectionTowards(Self, Find(id));
+
+        private Position Find(uint id)
+        {
+            for (var i = Snapshots.Count - 1; i >= 0; i--)
+            {
+                foreach (var e in Snapshots[i].Entities ?? [])
+                {
+                    if (e.EntityId == id)
+                    {
+                        return new Position(e.X, e.Z);
+                    }
+                }
+            }
+            return Welcome is { } w && w.EntityId == id ? new Position(w.X, w.Z) : default;
+        }
+
+        public List<CombatEvent> Combat { get; } = [];
+
+        public List<EntityDied> Deaths { get; } = [];
+
+        public SelfStatus? Status { get; private set; }
+
+        public void OnEntityInfo(GameConnection context, in EntityInfo message) => Info[message.EntityId] = message;
+
+        public void OnCombatEvent(GameConnection context, in CombatEvent message) => Combat.Add(message);
+
+        public void OnEntityDied(GameConnection context, in EntityDied message) => Deaths.Add(message);
+
+        public void OnSelfStatus(GameConnection context, in SelfStatus message) => Status = message;
+
+        public void OnRespawned(GameConnection context, in Respawned message)
         {
         }
     }

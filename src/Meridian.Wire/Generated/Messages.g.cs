@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0xCBFB6183603ADFDBUL;
+    public const ulong Hash = 0xECAF9EDA114FBB61UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -128,6 +128,56 @@ public partial struct Ping : IWireMessage<Ping>
     }
 }
 
+public partial struct SetTarget : IWireMessage<SetTarget>
+{
+    public const ushort Id = 103;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<SetTarget>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<SetTarget>.Delivery => Delivery.ReliableOrdered;
+
+    public uint EntityId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteVarU32(EntityId);
+    }
+
+    public static SetTarget Read(ref WireReader reader)
+    {
+        var value = default(SetTarget);
+        value.EntityId = reader.ReadVarU32();
+        return value;
+    }
+}
+
+public partial struct SetAttack : IWireMessage<SetAttack>
+{
+    public const ushort Id = 104;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<SetAttack>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<SetAttack>.Delivery => Delivery.ReliableOrdered;
+
+    public bool Enabled;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteBool(Enabled);
+    }
+
+    public static SetAttack Read(ref WireReader reader)
+    {
+        var value = default(SetAttack);
+        value.Enabled = reader.ReadBool();
+        return value;
+    }
+}
+
 public partial struct Welcome : IWireMessage<Welcome>
 {
     public const ushort Id = 200;
@@ -185,6 +235,8 @@ public partial struct EntityState : IWireStruct<EntityState>
 
     public byte HealthPercent;
 
+    public byte Flags;
+
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteVarU32(EntityId);
@@ -192,6 +244,7 @@ public partial struct EntityState : IWireStruct<EntityState>
         writer.WriteI32(Z);
         writer.WriteU8(Yaw);
         writer.WriteU8(HealthPercent);
+        writer.WriteU8(Flags);
     }
 
     public static EntityState Read(ref WireReader reader)
@@ -202,6 +255,7 @@ public partial struct EntityState : IWireStruct<EntityState>
         value.Z = reader.ReadI32();
         value.Yaw = reader.ReadU8();
         value.HealthPercent = reader.ReadU8();
+        value.Flags = reader.ReadU8();
         return value;
     }
 }
@@ -350,6 +404,183 @@ public partial struct Disconnecting : IWireMessage<Disconnecting>
     }
 }
 
+public partial struct EntityInfo : IWireMessage<EntityInfo>
+{
+    public const ushort Id = 205;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<EntityInfo>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<EntityInfo>.Delivery => Delivery.ReliableOrdered;
+
+    public uint EntityId;
+
+    public byte Kind;
+
+    public ushort TemplateId;
+
+    public string? Name;
+
+    public ushort Level;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteVarU32(EntityId);
+        writer.WriteU8(Kind);
+        writer.WriteU16(TemplateId);
+        writer.WriteString(Name, 32);
+        writer.WriteU16(Level);
+    }
+
+    public static EntityInfo Read(ref WireReader reader)
+    {
+        var value = default(EntityInfo);
+        value.EntityId = reader.ReadVarU32();
+        value.Kind = reader.ReadU8();
+        value.TemplateId = reader.ReadU16();
+        value.Name = reader.ReadString(32);
+        value.Level = reader.ReadU16();
+        return value;
+    }
+}
+
+public partial struct CombatEvent : IWireMessage<CombatEvent>
+{
+    public const ushort Id = 206;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<CombatEvent>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<CombatEvent>.Delivery => Delivery.ReliableOrdered;
+
+    public uint AttackerId;
+
+    public uint TargetId;
+
+    public byte Outcome;
+
+    public uint Damage;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteVarU32(AttackerId);
+        writer.WriteVarU32(TargetId);
+        writer.WriteU8(Outcome);
+        writer.WriteVarU32(Damage);
+    }
+
+    public static CombatEvent Read(ref WireReader reader)
+    {
+        var value = default(CombatEvent);
+        value.AttackerId = reader.ReadVarU32();
+        value.TargetId = reader.ReadVarU32();
+        value.Outcome = reader.ReadU8();
+        value.Damage = reader.ReadVarU32();
+        return value;
+    }
+}
+
+public partial struct EntityDied : IWireMessage<EntityDied>
+{
+    public const ushort Id = 207;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<EntityDied>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<EntityDied>.Delivery => Delivery.ReliableOrdered;
+
+    public uint EntityId;
+
+    public uint KillerId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteVarU32(EntityId);
+        writer.WriteVarU32(KillerId);
+    }
+
+    public static EntityDied Read(ref WireReader reader)
+    {
+        var value = default(EntityDied);
+        value.EntityId = reader.ReadVarU32();
+        value.KillerId = reader.ReadVarU32();
+        return value;
+    }
+}
+
+public partial struct SelfStatus : IWireMessage<SelfStatus>
+{
+    public const ushort Id = 208;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<SelfStatus>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<SelfStatus>.Delivery => Delivery.ReliableOrdered;
+
+    public int Health;
+
+    public int MaxHealth;
+
+    public uint TargetId;
+
+    public bool Attacking;
+
+    public bool Dead;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteI32(Health);
+        writer.WriteI32(MaxHealth);
+        writer.WriteVarU32(TargetId);
+        writer.WriteBool(Attacking);
+        writer.WriteBool(Dead);
+    }
+
+    public static SelfStatus Read(ref WireReader reader)
+    {
+        var value = default(SelfStatus);
+        value.Health = reader.ReadI32();
+        value.MaxHealth = reader.ReadI32();
+        value.TargetId = reader.ReadVarU32();
+        value.Attacking = reader.ReadBool();
+        value.Dead = reader.ReadBool();
+        return value;
+    }
+}
+
+public partial struct Respawned : IWireMessage<Respawned>
+{
+    public const ushort Id = 209;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<Respawned>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<Respawned>.Delivery => Delivery.ReliableOrdered;
+
+    public int X;
+
+    public int Z;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteI32(X);
+        writer.WriteI32(Z);
+    }
+
+    public static Respawned Read(ref WireReader reader)
+    {
+        var value = default(Respawned);
+        value.X = reader.ReadI32();
+        value.Z = reader.ReadI32();
+        return value;
+    }
+}
+
 public partial struct PlayerJoin : IWireMessage<PlayerJoin>
 {
     public const ushort Id = 1000;
@@ -478,6 +709,10 @@ public interface IServerBoundHandler<in TContext>
     void OnChatSay(TContext context, in ChatSay message);
 
     void OnPing(TContext context, in Ping message);
+
+    void OnSetTarget(TContext context, in SetTarget message);
+
+    void OnSetAttack(TContext context, in SetAttack message);
 }
 
 /// <summary>Receives ClientBound messages from <see cref="WireDispatch"/>.</summary>
@@ -492,6 +727,16 @@ public interface IClientBoundHandler<in TContext>
     void OnPong(TContext context, in Pong message);
 
     void OnDisconnecting(TContext context, in Disconnecting message);
+
+    void OnEntityInfo(TContext context, in EntityInfo message);
+
+    void OnCombatEvent(TContext context, in CombatEvent message);
+
+    void OnEntityDied(TContext context, in EntityDied message);
+
+    void OnSelfStatus(TContext context, in SelfStatus message);
+
+    void OnRespawned(TContext context, in Respawned message);
 }
 
 /// <summary>Receives Internal messages from <see cref="WireDispatch"/>.</summary>
@@ -541,6 +786,20 @@ public static class WireDispatch
                 handler.OnPing(context, message);
                 return id;
             }
+            case SetTarget.Id:
+            {
+                var message = SetTarget.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnSetTarget(context, message);
+                return id;
+            }
+            case SetAttack.Id:
+            {
+                var message = SetAttack.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnSetAttack(context, message);
+                return id;
+            }
             default:
                 throw new WireFormatException($"Message id {id} is not a ServerBound message.");
         }
@@ -587,6 +846,41 @@ public static class WireDispatch
                 var message = Disconnecting.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnDisconnecting(context, message);
+                return id;
+            }
+            case EntityInfo.Id:
+            {
+                var message = EntityInfo.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnEntityInfo(context, message);
+                return id;
+            }
+            case CombatEvent.Id:
+            {
+                var message = CombatEvent.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnCombatEvent(context, message);
+                return id;
+            }
+            case EntityDied.Id:
+            {
+                var message = EntityDied.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnEntityDied(context, message);
+                return id;
+            }
+            case SelfStatus.Id:
+            {
+                var message = SelfStatus.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnSelfStatus(context, message);
+                return id;
+            }
+            case Respawned.Id:
+            {
+                var message = Respawned.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnRespawned(context, message);
                 return id;
             }
             default:
