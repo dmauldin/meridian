@@ -1,6 +1,7 @@
 using Meridian.Core.World;
 using Meridian.Server.Zone;
 using Meridian.Wire;
+using Meridian.Wire.Delta;
 
 namespace Meridian.Server.Tests;
 
@@ -20,7 +21,26 @@ internal sealed class RecordingOutbox : IZoneOutbox
 
     public T Last<T>(ClientRef client)
         where T : struct, IWireMessage<T> => Of<T>(client)[^1];
+
+    /// <summary>The client's snapshots rebuilt to full state, exactly as a real client would.</summary>
+    public List<RebuiltSnapshot> Snapshots(ClientRef client)
+    {
+        var assembler = new SnapshotAssembler();
+        var result = new List<RebuiltSnapshot>();
+        foreach (var s in Of<DeltaSnapshot>(client))
+        {
+            if (assembler.TryApply(s, out var entities))
+            {
+                result.Add(new RebuiltSnapshot(s.Tick, s.AckedInputSequence, [.. entities.OrderBy(e => e.EntityId)]));
+            }
+        }
+        return result;
+    }
+
+    public RebuiltSnapshot LastSnapshot(ClientRef client) => Snapshots(client)[^1];
 }
+
+internal sealed record RebuiltSnapshot(uint Tick, uint AckedInputSequence, EntityState[] Entities);
 
 public class ZoneSimulationTests
 {
@@ -121,11 +141,11 @@ public class ZoneSimulationTests
         {
             sim.Step();
         }
-        var snaps = outbox.Of<Snapshot>(A);
+        var snaps = outbox.Snapshots(A);
         Assert.Equal(10, snaps.Count);
-        Assert.Contains(snaps[^1].Entities!, e => e.EntityId == a.EntityId);
-        Assert.Equal(2, snaps[^1].Entities!.Length);
-        Assert.Equal(10, outbox.Of<Snapshot>(B).Count);
+        Assert.Contains(snaps[^1].Entities, e => e.EntityId == a.EntityId);
+        Assert.Equal(2, snaps[^1].Entities.Length);
+        Assert.Equal(10, outbox.Snapshots(B).Count);
     }
 
     [Fact]
@@ -136,7 +156,7 @@ public class ZoneSimulationTests
         Send(sim, A, new MoveIntent { Sequence = 77 });
         sim.Step();
         sim.Step();
-        Assert.Equal(77u, outbox.Last<Snapshot>(A).AckedInputSequence);
+        Assert.Equal(77u, outbox.LastSnapshot(A).AckedInputSequence);
     }
 
     [Fact]
@@ -149,18 +169,12 @@ public class ZoneSimulationTests
         b.Position = new Position(5_000, 0);
         sim.Step();
         sim.Step();
-        Assert.Contains(outbox.Last<Snapshot>(A).Entities!, e => e.EntityId == b.EntityId);
+        Assert.Contains(outbox.LastSnapshot(A).Entities, e => e.EntityId == b.EntityId);
 
         b.Position = new Position(50_000, 0);
         sim.Step();
         sim.Step();
-        var snap = outbox.Last<Snapshot>(A);
-        Assert.DoesNotContain(snap.Entities!, e => e.EntityId == b.EntityId);
-        Assert.Contains(b.EntityId, snap.Removed!);
-
-        sim.Step();
-        sim.Step();
-        Assert.Empty(outbox.Last<Snapshot>(A).Removed!); // reported once
+        Assert.DoesNotContain(outbox.LastSnapshot(A).Entities, e => e.EntityId == b.EntityId);
     }
 
     [Fact]
@@ -174,7 +188,7 @@ public class ZoneSimulationTests
         }
         sim.Step();
         sim.Step();
-        var ids = outbox.Last<Snapshot>(players[0].Client).Entities!.Select(e => e.EntityId);
+        var ids = outbox.LastSnapshot(players[0].Client).Entities.Select(e => e.EntityId);
         Assert.Equal(players.Take(3).Select(p => p.EntityId), ids);
     }
 
@@ -190,7 +204,7 @@ public class ZoneSimulationTests
         Assert.False(sim.Leave(B));
         sim.Step();
         sim.Step();
-        Assert.Contains(b.EntityId, outbox.Last<Snapshot>(A).Removed!);
+        Assert.DoesNotContain(outbox.LastSnapshot(A).Entities, e => e.EntityId == b.EntityId);
     }
 
     [Fact]
@@ -276,5 +290,78 @@ public class ZoneDeterminismTests
         // Cross-checked against an independent implementation of the same mix.
         Assert.Equal(new Position(-25_225, -4_635), p1.Position);
         Assert.Equal(new Position(19_450, -6_115), p2.Position);
+    }
+}
+
+public class ZoneDeltaSnapshotTests
+{
+    private static readonly ClientRef A = new(1, 1);
+    private static readonly ClientRef B = new(1, 2);
+
+    private static void Ack(ZoneSimulation sim, ClientRef who, uint tick) =>
+        sim.HandleClientPacket(who, Envelope.ToArray(new SnapshotAck { Tick = tick }));
+
+    [Fact]
+    public void Without_acks_every_snapshot_is_full_state()
+    {
+        var outbox = new RecordingOutbox();
+        var sim = new ZoneSimulation(new ZoneOptions { MobCount = 0 }, outbox);
+        sim.Join(A, 1, "a");
+        sim.Join(B, 2, "b");
+        for (var i = 0; i < 10; i++)
+        {
+            sim.Step();
+        }
+        Assert.All(outbox.Of<DeltaSnapshot>(A), s => Assert.Equal(0u, s.BaselineTick));
+    }
+
+    [Fact]
+    public void After_an_ack_unchanged_entities_are_not_resent()
+    {
+        var outbox = new RecordingOutbox();
+        var sim = new ZoneSimulation(new ZoneOptions { MobCount = 0 }, outbox);
+        sim.Join(A, 1, "a");
+        sim.Join(B, 2, "b");
+        sim.Step();
+        sim.Step();
+        var first = outbox.Of<DeltaSnapshot>(A)[^1];
+        Ack(sim, A, first.Tick);
+        sim.Step();
+        sim.Step();
+
+        var next = outbox.Of<DeltaSnapshot>(A)[^1];
+        Assert.Equal(first.Tick, next.BaselineTick);
+        Assert.Equal([0], next.Entities); // nobody moved: zero entries
+        Assert.Equal(2, outbox.LastSnapshot(A).Entities.Length); // still two after rebuilding
+    }
+
+    [Fact]
+    public void Removed_is_relative_to_the_acknowledged_baseline()
+    {
+        var outbox = new RecordingOutbox();
+        var sim = new ZoneSimulation(new ZoneOptions { MobCount = 0, InterestRadiusMm = 10_000 }, outbox);
+        var a = sim.Join(A, 1, "a");
+        var b = sim.Join(B, 2, "b");
+        a.Position = new Meridian.Core.World.Position(0, 0);
+        b.Position = new Meridian.Core.World.Position(5_000, 0);
+        sim.Step();
+        sim.Step();
+        Ack(sim, A, outbox.Of<DeltaSnapshot>(A)[^1].Tick);
+
+        b.Position = new Meridian.Core.World.Position(50_000, 0);
+        sim.Step();
+        sim.Step();
+        var s = outbox.Of<DeltaSnapshot>(A)[^1];
+        Assert.Equal([b.EntityId], s.Removed!);
+        Assert.DoesNotContain(outbox.LastSnapshot(A).Entities, e => e.EntityId == b.EntityId);
+    }
+
+    [Fact]
+    public void Hand_written_ToClient_matches_the_generated_encoding()
+    {
+        byte[] payload = [1, 2, 3, 4, 5, 250];
+        var generated = Envelope.ToArray(new ToClient { ConnectionId = 77, DeliveryMode = (byte)Delivery.ReliableUnordered, Payload = payload });
+        var handWritten = ZoneHost.WriteToClient(new byte[64], 77, Delivery.ReliableUnordered, payload).ToArray();
+        Assert.Equal(generated, handWritten);
     }
 }

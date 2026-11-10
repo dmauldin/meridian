@@ -324,6 +324,10 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         public void OnSetAttack(int context, in SetAttack message)
         {
         }
+
+        public void OnSnapshotAck(int context, in SnapshotAck message)
+        {
+        }
     }
 }
 

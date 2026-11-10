@@ -1,6 +1,7 @@
 using Meridian.Core.World;
 using Meridian.Net.Client;
 using Meridian.Wire;
+using Meridian.Wire.Delta;
 
 namespace Meridian.ClientState;
 
@@ -19,6 +20,8 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
 
     private readonly Dictionary<uint, RemoteEntity> _entities = [];
     private readonly List<GameEvent> _events = [];
+    private readonly SnapshotAssembler _assembler = new();
+    private readonly HashSet<uint> _seen = [];
     private double _serverOffsetMs = double.NaN;
 
     /// <summary>Local monotonic time in ms; set by the owner before polling the connection.</summary>
@@ -91,13 +94,22 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
         InWorld = true;
     }
 
-    public void OnSnapshot(GameConnection context, in Snapshot message)
+    public void OnDeltaSnapshot(GameConnection context, in DeltaSnapshot message)
     {
+        if (!_assembler.TryApply(message, out var entities))
+        {
+            return; // stale, duplicate, or its baseline is gone: the next one recovers
+        }
+        // Acknowledge so the server deltas against this one. The context is null in unit tests.
+        context?.Send(new SnapshotAck { Tick = message.Tick });
+
         var serverMs = message.Tick * (double)TickMs;
         TrackServerClock(serverMs);
 
-        foreach (var e in message.Entities ?? [])
+        _seen.Clear();
+        foreach (var e in entities)
         {
+            _seen.Add(e.EntityId);
             var position = new Position(e.X, e.Z);
             if (e.EntityId == SelfId)
             {
@@ -114,9 +126,14 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
             }
             remote.AddSample(new EntitySample(serverMs, position, e.Yaw, e.HealthPercent, e.Flags));
         }
-        foreach (var id in message.Removed ?? [])
+
+        // The rebuilt snapshot is the complete visible set: anything else has left view.
+        foreach (var id in _entities.Keys.Where(id => !_seen.Contains(id)).ToList())
         {
-            _entities.Remove(id);
+            if (_entities[id].HasSamples)
+            {
+                _entities.Remove(id);
+            }
         }
     }
 

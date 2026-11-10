@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0x2A565AA0364AC334UL;
+    public const ulong Hash = 0x0978359F93215620UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -178,6 +178,31 @@ public partial struct SetAttack : IWireMessage<SetAttack>
     }
 }
 
+public partial struct SnapshotAck : IWireMessage<SnapshotAck>
+{
+    public const ushort Id = 105;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<SnapshotAck>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<SnapshotAck>.Delivery => Delivery.UnreliableSequenced;
+
+    public uint Tick;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(Tick);
+    }
+
+    public static SnapshotAck Read(ref WireReader reader)
+    {
+        var value = default(SnapshotAck);
+        value.Tick = reader.ReadU32();
+        return value;
+    }
+}
+
 public partial struct Welcome : IWireMessage<Welcome>
 {
     public const ushort Id = 200;
@@ -256,63 +281,6 @@ public partial struct EntityState : IWireStruct<EntityState>
         value.Yaw = reader.ReadU8();
         value.HealthPercent = reader.ReadU8();
         value.Flags = reader.ReadU8();
-        return value;
-    }
-}
-
-public partial struct Snapshot : IWireMessage<Snapshot>
-{
-    public const ushort Id = 201;
-
-    public static ushort MessageId => Id;
-
-    static Direction IWireMessage<Snapshot>.Direction => Direction.ClientBound;
-
-    static Delivery IWireMessage<Snapshot>.Delivery => Delivery.UnreliableSequenced;
-
-    public uint Tick;
-
-    public uint AckedInputSequence;
-
-    public EntityState[]? Entities;
-
-    public uint[]? Removed;
-
-    public readonly void Write(ref WireWriter writer)
-    {
-        writer.WriteU32(Tick);
-        writer.WriteU32(AckedInputSequence);
-        var entitiesItems = Entities ?? [];
-        writer.WriteCount(entitiesItems.Length, 64);
-        foreach (var item in entitiesItems)
-        {
-            item.Write(ref writer);
-        }
-        var removedItems = Removed ?? [];
-        writer.WriteCount(removedItems.Length, 64);
-        foreach (var item in removedItems)
-        {
-            writer.WriteVarU32(item);
-        }
-    }
-
-    public static Snapshot Read(ref WireReader reader)
-    {
-        var value = default(Snapshot);
-        value.Tick = reader.ReadU32();
-        value.AckedInputSequence = reader.ReadU32();
-        var entitiesCount = reader.ReadCount(64);
-        value.Entities = new EntityState[entitiesCount];
-        for (var i = 0; i < entitiesCount; i++)
-        {
-            value.Entities[i] = EntityState.Read(ref reader);
-        }
-        var removedCount = reader.ReadCount(64);
-        value.Removed = new uint[removedCount];
-        for (var i = 0; i < removedCount; i++)
-        {
-            value.Removed[i] = reader.ReadVarU32();
-        }
         return value;
     }
 }
@@ -585,6 +553,57 @@ public partial struct Respawned : IWireMessage<Respawned>
     }
 }
 
+public partial struct DeltaSnapshot : IWireMessage<DeltaSnapshot>
+{
+    public const ushort Id = 210;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<DeltaSnapshot>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<DeltaSnapshot>.Delivery => Delivery.UnreliableSequenced;
+
+    public uint Tick;
+
+    public uint BaselineTick;
+
+    public uint AckedInputSequence;
+
+    public byte[]? Entities;
+
+    public uint[]? Removed;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(Tick);
+        writer.WriteU32(BaselineTick);
+        writer.WriteU32(AckedInputSequence);
+        writer.WriteBytes(Entities, 1300);
+        var removedItems = Removed ?? [];
+        writer.WriteCount(removedItems.Length, 128);
+        foreach (var item in removedItems)
+        {
+            writer.WriteVarU32(item);
+        }
+    }
+
+    public static DeltaSnapshot Read(ref WireReader reader)
+    {
+        var value = default(DeltaSnapshot);
+        value.Tick = reader.ReadU32();
+        value.BaselineTick = reader.ReadU32();
+        value.AckedInputSequence = reader.ReadU32();
+        value.Entities = reader.ReadBytes(1300);
+        var removedCount = reader.ReadCount(128);
+        value.Removed = new uint[removedCount];
+        for (var i = 0; i < removedCount; i++)
+        {
+            value.Removed[i] = reader.ReadVarU32();
+        }
+        return value;
+    }
+}
+
 public partial struct PlayerJoin : IWireMessage<PlayerJoin>
 {
     public const ushort Id = 1000;
@@ -717,14 +736,14 @@ public interface IServerBoundHandler<in TContext>
     void OnSetTarget(TContext context, in SetTarget message);
 
     void OnSetAttack(TContext context, in SetAttack message);
+
+    void OnSnapshotAck(TContext context, in SnapshotAck message);
 }
 
 /// <summary>Receives ClientBound messages from <see cref="WireDispatch"/>.</summary>
 public interface IClientBoundHandler<in TContext>
 {
     void OnWelcome(TContext context, in Welcome message);
-
-    void OnSnapshot(TContext context, in Snapshot message);
 
     void OnChatMessage(TContext context, in ChatMessage message);
 
@@ -741,6 +760,8 @@ public interface IClientBoundHandler<in TContext>
     void OnSelfStatus(TContext context, in SelfStatus message);
 
     void OnRespawned(TContext context, in Respawned message);
+
+    void OnDeltaSnapshot(TContext context, in DeltaSnapshot message);
 }
 
 /// <summary>Receives Internal messages from <see cref="WireDispatch"/>.</summary>
@@ -804,6 +825,13 @@ public static class WireDispatch
                 handler.OnSetAttack(context, message);
                 return id;
             }
+            case SnapshotAck.Id:
+            {
+                var message = SnapshotAck.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnSnapshotAck(context, message);
+                return id;
+            }
             default:
                 throw new WireFormatException($"Message id {id} is not a ServerBound message.");
         }
@@ -822,13 +850,6 @@ public static class WireDispatch
                 var message = Welcome.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnWelcome(context, message);
-                return id;
-            }
-            case Snapshot.Id:
-            {
-                var message = Snapshot.Read(ref reader);
-                reader.EnsureEnd();
-                handler.OnSnapshot(context, message);
                 return id;
             }
             case ChatMessage.Id:
@@ -885,6 +906,13 @@ public static class WireDispatch
                 var message = Respawned.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnRespawned(context, message);
+                return id;
+            }
+            case DeltaSnapshot.Id:
+            {
+                var message = DeltaSnapshot.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnDeltaSnapshot(context, message);
                 return id;
             }
             default:

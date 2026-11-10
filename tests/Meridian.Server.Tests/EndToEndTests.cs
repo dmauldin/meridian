@@ -7,6 +7,7 @@ using Meridian.Server.Auth;
 using Meridian.Server.Gateway;
 using Meridian.Server.Zone;
 using Meridian.Wire;
+using Meridian.Wire.Delta;
 
 namespace Meridian.Server.Tests;
 
@@ -60,7 +61,7 @@ public sealed class EndToEndTests : IDisposable
         conn.Send(new MoveIntent { Sequence = 1, DirX = 32_767 });
         Pump(conn, () => client.Snapshots.Count >= 5, "snapshots");
 
-        var self = client.Snapshots[^1].Entities!.Single(e => e.EntityId == client.Welcome!.Value.EntityId);
+        var self = client.Snapshots[^1].Entities.Single(e => e.EntityId == client.Welcome!.Value.EntityId);
         Assert.True(self.X > client.Welcome!.Value.X, "player should have moved +X");
         Assert.Equal(1u, client.Snapshots[^1].AckedInputSequence);
     }
@@ -73,7 +74,7 @@ public sealed class EndToEndTests : IDisposable
         using var ca = Connect(a, "alice");
         using var cb = Connect(b, "bob");
 
-        Pump([ca, cb], () => b.Welcome is not null && a.Snapshots.LastOrDefault().Entities?.Any(e => e.EntityId == b.Welcome.Value.EntityId) == true, "a to see b");
+        Pump([ca, cb], () => b.Welcome is not null && a.Snapshots.LastOrDefault()?.Entities.Any(e => e.EntityId == b.Welcome.Value.EntityId) == true, "a to see b");
         Assert.Equal("bob", a.Info[b.Welcome!.Value.EntityId].Name);
         ca.Send(new ChatSay { Text = "hello bob" });
         Pump([ca, cb], () => b.Chat.Contains("alice: hello bob"), "b to hear a");
@@ -215,13 +216,22 @@ public sealed class EndToEndTests : IDisposable
     {
         public Welcome? Welcome { get; private set; }
 
-        public List<Snapshot> Snapshots { get; } = [];
+        private readonly SnapshotAssembler _assembler = new();
+
+        public List<RebuiltSnapshot> Snapshots { get; } = [];
 
         public List<string> Chat { get; } = [];
 
         public void OnWelcome(GameConnection context, in Welcome message) => Welcome = message;
 
-        public void OnSnapshot(GameConnection context, in Snapshot message) => Snapshots.Add(message);
+        public void OnDeltaSnapshot(GameConnection context, in DeltaSnapshot message)
+        {
+            if (_assembler.TryApply(message, out var entities))
+            {
+                context.Send(new SnapshotAck { Tick = message.Tick });
+                Snapshots.Add(new RebuiltSnapshot(message.Tick, message.AckedInputSequence, [.. entities]));
+            }
+        }
 
         public void OnChatMessage(GameConnection context, in ChatMessage message) => Chat.Add($"{message.FromName}: {message.Text}");
 
@@ -245,7 +255,7 @@ public sealed class EndToEndTests : IDisposable
         {
             for (var i = Snapshots.Count - 1; i >= 0; i--)
             {
-                foreach (var e in Snapshots[i].Entities ?? [])
+                foreach (var e in Snapshots[i].Entities)
                 {
                     if (e.EntityId == id)
                     {

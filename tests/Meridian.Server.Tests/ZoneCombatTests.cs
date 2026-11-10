@@ -252,7 +252,7 @@ public class ZoneCombatTests
         JoinAt(sim, A, "a", mob.Spawn with { X = mob.Spawn.X + 20_000 });
         Attack(sim, A, mob);
         Steps(sim, 4);
-        var state = outbox.Last<Snapshot>(A).Entities!.Single(e => e.EntityId == mob.EntityId);
+        var state = outbox.LastSnapshot(A).Entities.Single(e => e.EntityId == mob.EntityId);
         Assert.Equal(2, state.Flags & 2);
         mob.Health = 1;
         while (!mob.Dead)
@@ -260,7 +260,7 @@ public class ZoneCombatTests
             sim.Step();
         }
         Steps(sim, 2);
-        state = outbox.Last<Snapshot>(A).Entities!.Single(e => e.EntityId == mob.EntityId);
+        state = outbox.LastSnapshot(A).Entities.Single(e => e.EntityId == mob.EntityId);
         Assert.Equal(1, state.Flags & 1);
         Assert.Equal(0, state.HealthPercent);
     }
