@@ -69,6 +69,17 @@ public static class Formulas
         return (int)Math.Max(baseTimeMs / 2, reduced);
     }
 
+    /// <summary>
+    /// Threat an attack adds against its target: the damage dealt, scaled by the attacker's
+    /// <see cref="Stat.ThreatModifier"/> (basis points, either direction, floored at zero).
+    /// A miss counts as 1 damage so an attacker who never lands a hit still draws attention.
+    /// </summary>
+    public static long Threat(int damageDealt, int threatModifierBp)
+    {
+        var factor = Math.Max(0L, 10_000L + threatModifierBp);
+        return Math.Max(1, damageDealt) * factor / 10_000;
+    }
+
     /// <summary>The armor-class stat that mitigates <paramref name="type"/>.</summary>
     public static Stat ArmorFor(DamageType type) => type switch
     {

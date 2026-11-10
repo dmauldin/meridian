@@ -97,7 +97,10 @@ zone's seeded `DeterministicRandom`, so a fight with the same inputs replays byt
 (there is a test for it).
 
 Mobs wander near their spawn, attack players who come within aggro range, chase whoever
-has dealt them the most damage, and give up and walk home healed past their leash. Dead mobs
+has generated the most threat, and give up and walk home healed past their leash. While
+walking home they are immune (attacks show as "evaded"). Threat equals damage dealt (a miss
+counts as 1), scaled by the attacker's `ThreatModifier` stat, which Protocols can raise or
+lower. After a kill the corpse stays targeted until the player clears it. Dead mobs
 respawn at their spawn point; dead players respawn at a spawn point after 5 s at full health.
 
 ## Known limits and next steps (M1)

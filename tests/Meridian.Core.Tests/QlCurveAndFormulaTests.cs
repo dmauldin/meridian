@@ -89,6 +89,19 @@ public class FormulaTests
         Assert.Equal(expected, Formulas.ActionTimeMs(baseMs, init));
     }
 
+    [Theory]
+    [InlineData(100, 0, 100)]          // threat = damage
+    [InlineData(100, 5_000, 150)]      // tank stance
+    [InlineData(100, -3_000, 70)]      // stealth buff
+    [InlineData(100, -10_000, 0)]      // fully suppressed
+    [InlineData(100, -20_000, 0)]      // never negative
+    [InlineData(0, 0, 1)]              // a miss still counts
+    [InlineData(0, 10_000, 2)]
+    public void Threat_golden_values(int damage, int modifierBp, long expected)
+    {
+        Assert.Equal(expected, Formulas.Threat(damage, modifierBp));
+    }
+
     [Fact]
     public void Same_seed_gives_identical_combat()
     {

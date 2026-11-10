@@ -1,6 +1,7 @@
 using Meridian.Core.Characters;
 using Meridian.Core.Combat;
 using Meridian.Core.Randomness;
+using Meridian.Core.Stats;
 using Meridian.Core.World;
 using Meridian.Wire;
 
@@ -223,26 +224,32 @@ public sealed partial class ZoneSimulation
         }
     }
 
+    /// <summary>CombatEvent.outcome values.</summary>
+    private const byte OutcomeMiss = 0, OutcomeHit = 1, OutcomeCritical = 2, OutcomeEvaded = 3;
+
     private void Swing(Entity attacker, Entity target)
     {
         attacker.AttackCooldownMs = Formulas.AttackTimeMs(attacker.Weapon, attacker.Character);
-        var outcome = Formulas.ResolveAttack(_rng, attacker.Weapon, attacker.Character, target.Character);
         attacker.LastCombatTick = Tick;
+
+        if (target is Mob { State: MobState.Returning })
+        {
+            // A leashed mob walking home is immune: no roll, no damage, no threat. This stops
+            // players from pulling a mob past its leash and shooting it for free on the way back.
+            BroadcastCombat(attacker, target, OutcomeEvaded, 0);
+            return;
+        }
+
+        var outcome = Formulas.ResolveAttack(_rng, attacker.Weapon, attacker.Character, target.Character);
         target.LastCombatTick = Tick;
 
         if (target is Mob mob)
         {
-            // Misses still register, so an attacker who never lands a hit still draws aggro.
-            mob.Threat[attacker.EntityId] = mob.Threat.GetValueOrDefault(attacker.EntityId) + Math.Max(1, outcome.Damage);
+            var threat = Formulas.Threat(outcome.Damage, attacker.Character.Get(Stat.ThreatModifier));
+            mob.Threat[attacker.EntityId] = mob.Threat.GetValueOrDefault(attacker.EntityId) + threat;
         }
 
-        Broadcast(target.Position, _options.InterestRadiusMm, new CombatEvent
-        {
-            AttackerId = attacker.EntityId,
-            TargetId = target.EntityId,
-            Outcome = (byte)(!outcome.Hit ? 0 : outcome.Critical ? 2 : 1),
-            Damage = (uint)outcome.Damage,
-        });
+        BroadcastCombat(attacker, target, !outcome.Hit ? OutcomeMiss : outcome.Critical ? OutcomeCritical : OutcomeHit, outcome.Damage);
 
         if (!outcome.Hit)
         {
@@ -254,6 +261,15 @@ public sealed partial class ZoneSimulation
             Kill(target, attacker);
         }
     }
+
+    private void BroadcastCombat(Entity attacker, Entity target, byte outcome, int damage) =>
+        Broadcast(target.Position, _options.InterestRadiusMm, new CombatEvent
+        {
+            AttackerId = attacker.EntityId,
+            TargetId = target.EntityId,
+            Outcome = outcome,
+            Damage = (uint)damage,
+        });
 
     private void Kill(Entity victim, Entity killer)
     {

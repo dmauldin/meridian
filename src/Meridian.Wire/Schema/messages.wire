@@ -106,7 +106,7 @@ message 205 EntityInfo client_bound reliable_ordered
   u16 level
 end
 
-# outcome: 0 = miss, 1 = hit, 2 = critical.
+# outcome: 0 = miss, 1 = hit, 2 = critical, 3 = evaded (target immune, e.g. a leashed mob going home).
 message 206 CombatEvent client_bound reliable_ordered
   varu32 attackerId
   varu32 targetId

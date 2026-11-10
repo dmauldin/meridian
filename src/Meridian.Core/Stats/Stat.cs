@@ -88,6 +88,12 @@ public enum Stat : ushort
     AddDamage = 180,
     /// <summary>Critical-hit chance in basis points (100 = 1%).</summary>
     CritChance = 181,
+
+    /// <summary>
+    /// Adjusts the threat this character generates, in basis points: +5000 = 150% threat
+    /// (a tank's stance), -3000 = 70% (a stealthy buff). Base 0. Protocols modify it.
+    /// </summary>
+    ThreatModifier = 182,
 }
 
 /// <summary>Helpers for mapping the sparse <see cref="Stat"/> ids onto dense arrays.</summary>

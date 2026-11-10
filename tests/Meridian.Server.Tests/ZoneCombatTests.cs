@@ -1,3 +1,6 @@
+using Meridian.Core.Protocols;
+using Meridian.Core.Requirements;
+using Meridian.Core.Stats;
 using Meridian.Core.World;
 using Meridian.Server.Zone;
 using Meridian.Wire;
@@ -294,5 +297,86 @@ public class ZoneCombatTests
             var d = Movement.Distance(p, new Position(0, 0));
             Assert.InRange(d, options.MobRingInnerMm, options.MobRingOuterMm);
         });
+    }
+
+    [Fact]
+    public void A_mob_walking_home_after_its_leash_is_immune()
+    {
+        var (sim, outbox, mob) = OneMob();
+        var a = JoinAt(sim, A, "a", mob.Spawn with { X = mob.Spawn.X + 20_000 });
+        Attack(sim, A, mob);
+        Steps(sim, 2);
+        Send(sim, A, new SetAttack { Enabled = false });
+        a.Position = mob.Spawn with { X = mob.Spawn.X + 80_000 };
+        while (mob.State != MobState.Returning)
+        {
+            sim.Step();
+        }
+
+        // Chase it down and shoot it on the way home.
+        var health = mob.Health;
+        a.Position = mob.Position with { X = mob.Position.X + 10_000 };
+        outbox.Sent.Clear();
+        Attack(sim, A, mob);
+        Steps(sim, 3);
+
+        var evaded = outbox.Of<CombatEvent>(A).Where(e => e.TargetId == mob.EntityId).ToList();
+        Assert.NotEmpty(evaded);
+        Assert.All(evaded, e => Assert.Equal(3, e.Outcome));
+        Assert.All(evaded, e => Assert.Equal(0u, e.Damage));
+        Assert.Equal(health, mob.Health);
+        Assert.Empty(mob.Threat);
+        Assert.Equal(MobState.Returning, mob.State); // being shot does not pull it back into the fight
+    }
+
+    [Fact]
+    public void The_corpse_stays_targeted_until_the_player_clears_it()
+    {
+        var (sim, outbox, mob) = OneMob();
+        var a = JoinAt(sim, A, "a", mob.Spawn with { X = mob.Spawn.X + 20_000 });
+        Attack(sim, A, mob);
+        mob.Health = 1;
+        while (!mob.Dead)
+        {
+            sim.Step();
+        }
+        Steps(sim, 5);
+        Assert.Equal(mob.EntityId, a.TargetId);
+        var status = outbox.Last<SelfStatus>(A);
+        Assert.Equal(mob.EntityId, status.TargetId);
+        Assert.False(status.Attacking);
+
+        Send(sim, A, new SetTarget { EntityId = 0 });
+        sim.Step();
+        Assert.Equal(0u, outbox.Last<SelfStatus>(A).TargetId);
+    }
+
+    [Fact]
+    public void Threat_equals_damage_scaled_by_threat_modifier_buffs()
+    {
+        var (sim, outbox, mob) = OneMob();
+        var tank = JoinAt(sim, A, "tank", mob.Spawn with { X = mob.Spawn.X + 20_000 });
+        var sneak = JoinAt(sim, B, "sneak", mob.Spawn with { X = mob.Spawn.X - 20_000 });
+        var plain = JoinAt(sim, new ClientRef(1, 3), "plain", mob.Spawn with { Z = mob.Spawn.Z + 20_000 });
+
+        static ProtocolDef ThreatBuff(int id, int bp) => new(
+            id, $"Threat {bp}", new ProtocolLine(900 + id), 1, LatticeCost: 1, EnergyCost: 0, DurationTicks: 10_000,
+            Requirement.None, [new StatEffect(Stat.ThreatModifier, ModifierKind.Flat, bp)]);
+        Assert.Equal(ApplyResult.Applied, new ActiveProtocols(tank.Character.Stats).TryApply(ThreatBuff(1, 10_000), 0)); // 200%
+        Assert.Equal(ApplyResult.Applied, new ActiveProtocols(sneak.Character.Stats).TryApply(ThreatBuff(2, -5_000), 0)); // 50%
+
+        Attack(sim, A, mob);
+        Attack(sim, B, mob);
+        Attack(sim, new ClientRef(1, 3), mob);
+        Steps(sim, 100);
+        Assert.False(mob.Dead);
+
+        long Expected(Entity who, int bp) => outbox.Of<CombatEvent>(A)
+            .Where(e => e.AttackerId == who.EntityId && e.TargetId == mob.EntityId)
+            .Sum(e => Meridian.Core.Combat.Formulas.Threat((int)e.Damage, bp));
+        Assert.Equal(Expected(tank, 10_000), mob.Threat[tank.EntityId]);
+        Assert.Equal(Expected(sneak, -5_000), mob.Threat[sneak.EntityId]);
+        Assert.Equal(Expected(plain, 0), mob.Threat[plain.EntityId]);
+        Assert.Equal(tank.EntityId, mob.TargetId); // the tank holds aggro
     }
 }
