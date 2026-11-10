@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/client/">
+    <Project Path="client/Meridian.Client.csproj">
+      <BuildType Project="Debug" />
+    </Project>
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Meridian.Bots/Meridian.Bots.csproj" />
     <Project Path="src/Meridian.ClientState/Meridian.ClientState.csproj" />

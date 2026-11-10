@@ -12,3 +12,4 @@ artifacts/
 .import/
 export_presets.cfg
 deploy/.env
+*.csproj.old
