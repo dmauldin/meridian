@@ -40,3 +40,26 @@ jobs:
         with:
           name: m0-gate-logs-${{ matrix.mode }}
           path: artifacts/m0-gate/
+
+  m1-gate:
+    # Two headless Godot clients on autopilot kill the same mob together.
+    runs-on: ubuntu-latest
+    needs: build-test
+    env:
+      GODOT_VERSION: 4.7.2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Install Godot (.NET build)
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip"
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$(ls $RUNNER_TEMP/godot/*/Godot_v*_mono_linux.x86_64)" >> "$GITHUB_ENV"
+      - run: scripts/m1-gate.sh 150
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1-gate-logs
+          path: artifacts/m1-gate/

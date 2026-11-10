@@ -1,0 +1,25 @@
+; Godot project settings. Input actions are registered in code (src/Controls.cs) so key
+; bindings are reviewable C# rather than serialized input events.
+config_version=5
+
+[application]
+config/name="Meridian"
+config/description="Project Meridian client"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/vsync/vsync_mode=1
+
+[dotnet]
+project/assembly_name="Meridian.Client"
+
+[physics]
+common/physics_ticks_per_second=60
+
+[rendering]
+renderer/rendering_method="forward_plus"
+anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/screen_space_aa=1

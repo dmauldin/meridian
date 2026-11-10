@@ -1,0 +1,10 @@
+<Project>
+  <!-- Inherit the repo's settings, then relax what the Godot SDK is incompatible with. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup>
+    <!-- Godot.NET.Sdk pins its own package versions. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!-- Godot needs script classes to be public; Godot-generated members are not documented. -->
+    <NoWarn>$(NoWarn);CA1515;CA1001</NoWarn>
+  </PropertyGroup>
+</Project>

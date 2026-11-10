@@ -97,7 +97,7 @@ public sealed class Player : Entity
 }
 
 /// <summary>What <c>SelfStatus</c> last told the player, to send only changes.</summary>
-internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead);
+internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead, int RunSpeed);
 
 public enum MobState : byte
 {

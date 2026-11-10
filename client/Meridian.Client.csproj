@@ -1,0 +1,11 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>Meridian.Client</RootNamespace>
+    <!-- Explicit: Godot inserts net8.0 into the csproj if none is declared here. -->
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Meridian.ClientState/Meridian.ClientState.csproj" />
+  </ItemGroup>
+</Project>
