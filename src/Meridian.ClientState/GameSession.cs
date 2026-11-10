@@ -12,11 +12,15 @@ public sealed class GameSession : IDisposable
     private readonly InputPacer _pacer = new();
     private double _lastUpdateMs = double.NaN;
 
-    private GameSession(GameConnection connection, ClientWorld world)
+    private GameSession(GameConnection connection, ClientWorld world, string characterName)
     {
         Connection = connection;
         World = world;
+        CharacterName = characterName;
     }
+
+    /// <summary>The logged-in character's name (M1: the username).</summary>
+    public string CharacterName { get; }
 
     public GameConnection Connection { get; }
 
@@ -34,7 +38,7 @@ public sealed class GameSession : IDisposable
         var world = new ClientWorld();
         var connection = new GameConnection(world);
         connection.Connect(login.GatewayHost, login.GatewayPort, login);
-        return new GameSession(connection, world);
+        return new GameSession(connection, world, username);
     }
 
     /// <summary>
