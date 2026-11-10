@@ -7,12 +7,12 @@ names and systems are original.
 - Design: [Game Design Document](https://claude.ai/artifact/8FGVNSTFDMqDiQZ9AN5WzB)
 - Architecture: [Technical Architecture & Roadmap](https://claude.ai/artifact/6owmrpxx4VkgdvmS3wDvvQ)
 
-## Status: M0 complete; M1 server combat in progress
+## Status: M0 complete; M1 gate passing
 
 | Gate | Result |
 | --- | --- |
 | M0: 100 bots in one zone at a steady 20 Hz | **Pass.** 20.00 Hz, p99 tick work 1.1–2.2 ms, 0 overruns, ~7 KB/s per client, every bot at 10 Hz snapshots (2-core box, bots and all services co-located, 60 s) |
-| M1: 2 players kill a mob together over the net | **Server side passes** (`EndToEndTests.Two_players_kill_a_mob_together_over_the_network`). Needs the Godot client to close. |
+| M1: 2 players kill a mob together over the net | **Pass with the real client.** `scripts/m1-gate.sh` runs two headless Godot clients on autopilot; both hit the same skitter and see it die (~21 s). Also covered server-side by `EndToEndTests`. |
 | Combat load: 100 hunting bots vs 40 mobs | 20.00 Hz, p99 tick work 1.5–3.9 ms, 0 overruns, 1,802 hits and 114 kills in 60 s |
 
 Headroom check, same machine: 300 bots still held 20 Hz with no overruns; p99 tick work
@@ -36,7 +36,11 @@ src/
   Meridian.Server.Zone/     Authoritative 20 Hz simulation (ZoneSimulation), mob AI and
                             auto-attack combat (ZoneSimulation.Combat), and its host.
                             StarterContent holds the hand-written M1 mob and weapon.
+  Meridian.ClientState/     The client's world model, engine-free: interpolation, prediction
+                            and reconciliation, input pacing, events. Unit-tested.
   Meridian.Bots/            Headless load-test clients.
+client/                     Godot 4.7 (.NET) game client. Scripts in client/src draw
+                            ClientState; scenes and UI are built in code for reviewable diffs.
 tests/                      xunit v3 on Microsoft.Testing.Platform.
 scripts/m0-gate.sh          Builds, starts the stack, runs bots, checks the gate.
 deploy/                     Dockerfile and docker-compose for the server stack.
@@ -71,6 +75,22 @@ Or with Docker: copy `deploy/.env.example` to `deploy/.env`, set real keys, then
 `docker compose -f deploy/docker-compose.yml up --build`.
 The compose file has been syntax-checked but not yet run end to end (the build machine
 could not pull base images).
+
+## Playing the client (Windows)
+
+1. Install the **.NET 10 SDK** and **Godot 4.7.2, .NET edition** (the standard build cannot run C#).
+2. Start the servers (any OS), each in its own terminal:
+   `dotnet run --project src/Meridian.Server.Zone`, `...Gateway`, `...Auth`.
+3. Open `client/project.godot` in Godot and press Play (F5), or from a shell:
+   `godot --path client`.
+4. Log in with any name and the password `dev`. To play with a friend, run the servers on a
+   machine you both reach and set `MERIDIAN_PUBLIC_GATEWAY_HOST` on auth to its address.
+
+Controls: WASD move, right-drag to look, wheel to zoom, Tab or left-click to target,
+Q toggles auto-attack, Esc clears the target, Enter chats.
+
+Headless autoplay (what the M1 gate uses):
+`godot --headless --path client -- --autopilot --user Ann --pass dev --timeout 120`
 
 ## How a session works
 
@@ -108,7 +128,10 @@ respawn at their spawn point; dead players respawn at a spawn point after 5 s at
 - **No persistence yet.** Auth accepts any valid username with the dev password; characters
   are created fresh on join. Postgres and real accounts arrive in M2.
 - **Snapshots are full state**, not deltas against an acknowledged baseline. Fine at ~7 KB/s
-  per client in M0; delta compression comes with the Godot client in M1.
+  per client; delta compression is the next M1 PR.
+- **Placeholder art**: capsules and a glassy six-legged skitter built from primitives.
+- **Prediction blends rather than replays inputs.** Fine without collision; input replay
+  arrives with terrain.
 - **Allocation on the hot path.** Snapshot arrays and the zone-to-gateway envelope copy the
   payload. Pooled buffers are the first optimisation if profiling at higher counts asks for it.
 - **The auth service speaks plain HTTP** for local development. Production must put TLS in
