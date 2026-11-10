@@ -7,7 +7,7 @@ names and systems are original.
 - Design: [Game Design Document](https://claude.ai/artifact/8FGVNSTFDMqDiQZ9AN5WzB)
 - Architecture: [Technical Architecture & Roadmap](https://claude.ai/artifact/6owmrpxx4VkgdvmS3wDvvQ)
 
-## Status: M0 complete; M1 gate passing
+## Status: M0 and M1 complete
 
 | Gate | Result |
 | --- | --- |
@@ -99,12 +99,15 @@ Headless autoplay (what the M1 gate uses):
 2. The client connects to the gateway over UDP, sending the schema hash and the ticket as
    connection data. The gateway rejects version mismatches, forged/expired tickets and
    reused tickets, with a reason the client can show.
-3. Every packet after that is sealed with ChaCha20-Poly1305 under the session key (counter
-   nonce, sender role in the nonce, 64-packet replay window).
+3. Every packet after that is sealed with ChaCha20-Poly1305 under the session key. Each
+   transport channel is its own stream with its own counter and 1,024-packet replay window;
+   sender role and stream id are part of the nonce.
 4. The gateway decrypts, fully decodes each packet against the schema (so only well-formed,
    client-legal messages pass), rate-limits, and forwards to the zone.
 5. The zone applies intents, steps at 20 Hz, and sends each player a snapshot of the
-   nearest 64 entities within 100 m at 10 Hz. Names and appearance (`EntityInfo`) go once,
+   nearest 64 entities within 100 m at 10 Hz, as a delta against the newest snapshot the
+   client acknowledged (`SnapshotAck`): unchanged entities cost nothing, moving ones a few
+   bytes. Loss costs bandwidth, never correctness. Names and appearance (`EntityInfo`) go once,
    reliably, when an entity first comes into view; snapshots carry only state.
 
 ## Combat (M1)
@@ -127,13 +130,12 @@ respawn at their spawn point; dead players respawn at a spawn point after 5 s at
 
 - **No persistence yet.** Auth accepts any valid username with the dev password; characters
   are created fresh on join. Postgres and real accounts arrive in M2.
-- **Snapshots are full state**, not deltas against an acknowledged baseline. Fine at ~7 KB/s
-  per client; delta compression is the next M1 PR.
 - **Placeholder art**: capsules and a glassy six-legged skitter built from primitives.
 - **Prediction blends rather than replays inputs.** Fine without collision; input replay
   arrives with terrain.
-- **Allocation on the hot path.** Snapshot arrays and the zone-to-gateway envelope copy the
-  payload. Pooled buffers are the first optimisation if profiling at higher counts asks for it.
+- **Some allocation on the hot path**: one small array per snapshot for the delta bytes, and
+  the gateway's decode of each zone envelope. Worth removing if profiling at higher player
+  counts asks for it.
 - **The auth service speaks plain HTTP** for local development. Production must put TLS in
   front of it; session keys must never travel in clear.
 - **Skill training costs and caps** (points per level, cost tiers by profession and origin)
