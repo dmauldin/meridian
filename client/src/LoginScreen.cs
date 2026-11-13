@@ -8,10 +8,13 @@ public partial class LoginScreen : CanvasLayer
     private readonly LineEdit _auth = new() { Text = "http://127.0.0.1:5080/", PlaceholderText = "Auth server URL" };
     private readonly LineEdit _user = new() { PlaceholderText = "Username", MaxLength = 24 };
     private readonly LineEdit _pass = new() { PlaceholderText = "Password", Secret = true, Text = "dev" };
+    private readonly OptionButton _profession = new();
+    private readonly OptionButton _origin = new();
     private readonly Button _go = new() { Text = "Log in" };
     private readonly Label _status = new() { HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart };
 
-    public event Action<string, string, string>? LoginRequested;
+    /// <summary>auth URL, username, password, profession name, origin name.</summary>
+    public event Action<string, string, string, string, string>? LoginRequested;
 
     public override void _Ready()
     {
@@ -34,6 +37,24 @@ public partial class LoginScreen : CanvasLayer
         box.AddChild(_auth);
         box.AddChild(_user);
         box.AddChild(_pass);
+
+        // Development: choose the new character's profession and origin from what content offers.
+        var pack = Meridian.Content.ContentPacks.Embedded;
+        foreach (var p in pack.Professions.All)
+        {
+            _profession.AddItem(p.Name);
+        }
+        foreach (var o in pack.Origins.All)
+        {
+            _origin.AddItem(o.Name);
+        }
+        _profession.Select(Math.Max(0, pack.Professions.All.ToList().FindIndex(p => p.Name == "Operative")));
+        var picks = new HBoxContainer();
+        picks.AddChild(new Label { Text = "Profession" });
+        picks.AddChild(_profession);
+        picks.AddChild(new Label { Text = "  Origin" });
+        picks.AddChild(_origin);
+        box.AddChild(picks);
         box.AddChild(_go);
         box.AddChild(_status);
 
@@ -57,6 +78,7 @@ public partial class LoginScreen : CanvasLayer
         {
             return;
         }
-        LoginRequested?.Invoke(_auth.Text.Trim(), _user.Text.Trim(), _pass.Text);
+        LoginRequested?.Invoke(_auth.Text.Trim(), _user.Text.Trim(), _pass.Text,
+            _profession.GetItemText(_profession.Selected), _origin.GetItemText(_origin.Selected));
     }
 }
