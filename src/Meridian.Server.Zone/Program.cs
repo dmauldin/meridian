@@ -1,5 +1,6 @@
 using System.Globalization;
 using Meridian.Net;
+using Meridian.Persistence;
 using Meridian.Server.Zone;
 
 // Configuration via environment, so containers and the dev script set it the same way.
@@ -12,9 +13,18 @@ Console.CancelKeyPress += (_, e) =>
     e.Cancel = true;
     cts.Cancel();
 };
-AppDomain.CurrentDomain.ProcessExit += (_, _) => cts.Cancel();
+// SIGTERM (docker stop, systemd, the gate scripts) must end the loop rather than the process, so
+// the shutdown checkpoint reaches the store. ProcessExit alone lets the runtime exit first.
+using var sigterm = System.Runtime.InteropServices.PosixSignalRegistration.Create(
+    System.Runtime.InteropServices.PosixSignal.SIGTERM,
+    context =>
+    {
+        context.Cancel = true;
+        cts.Cancel();
+    });
 
-using var host = new ZoneHost(new ZoneHostOptions { Port = port, InternalKey = key });
+var store = GameStores.FromEnvironment(Environment.GetEnvironmentVariable, Console.Out);
+using var host = new ZoneHost(new ZoneHostOptions { Port = port, InternalKey = key }, store);
 host.Start();
 host.Run(cts.Token);
 Console.WriteLine("zone stopped");

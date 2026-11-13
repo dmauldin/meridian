@@ -27,6 +27,10 @@ dotnet build "$ROOT/Meridian.slnx" -c Release -v quiet -nologo >"$OUT/build.log"
 
 export MERIDIAN_LOGINS_PER_MINUTE_PER_IP=100000
 export DOTNET_gcServer=0
+# A fresh development store per run, shared by auth and zone. Bots register on first login;
+# cheap password hashing keeps 100 registrations from dominating start-up (auth warns about it).
+export MERIDIAN_STORE=file MERIDIAN_STORE_DIR="$OUT/store" MERIDIAN_PBKDF2_ITERATIONS=10000
+rm -rf "$MERIDIAN_STORE_DIR"
 
 pids=()
 cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; wait 2>/dev/null || true; }

@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0x9F2DD4CDE2D0243AUL;
+    public const ulong Hash = 0xB3C5E89D076FA9D9UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -799,17 +799,14 @@ public partial struct PlayerJoin : IWireMessage<PlayerJoin>
 
     public string? Name;
 
-    public byte Profession;
-
-    public byte Origin;
+    public ulong CharacterId;
 
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteU32(ConnectionId);
         writer.WriteU64(AccountId);
         writer.WriteString(Name, 32);
-        writer.WriteU8(Profession);
-        writer.WriteU8(Origin);
+        writer.WriteU64(CharacterId);
     }
 
     public static PlayerJoin Read(ref WireReader reader)
@@ -818,8 +815,7 @@ public partial struct PlayerJoin : IWireMessage<PlayerJoin>
         value.ConnectionId = reader.ReadU32();
         value.AccountId = reader.ReadU64();
         value.Name = reader.ReadString(32);
-        value.Profession = reader.ReadU8();
-        value.Origin = reader.ReadU8();
+        value.CharacterId = reader.ReadU64();
         return value;
     }
 }
@@ -911,6 +907,35 @@ public partial struct ToClient : IWireMessage<ToClient>
     }
 }
 
+public partial struct DropClient : IWireMessage<DropClient>
+{
+    public const ushort Id = 1004;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<DropClient>.Direction => Direction.Internal;
+
+    static Delivery IWireMessage<DropClient>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ConnectionId;
+
+    public string? Reason;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ConnectionId);
+        writer.WriteString(Reason, 160);
+    }
+
+    public static DropClient Read(ref WireReader reader)
+    {
+        var value = default(DropClient);
+        value.ConnectionId = reader.ReadU32();
+        value.Reason = reader.ReadString(160);
+        return value;
+    }
+}
+
 /// <summary>Receives ServerBound messages from <see cref="WireDispatch"/>.</summary>
 public interface IServerBoundHandler<in TContext>
 {
@@ -969,6 +994,8 @@ public interface IInternalHandler<in TContext>
     void OnFromClient(TContext context, in FromClient message);
 
     void OnToClient(TContext context, in ToClient message);
+
+    void OnDropClient(TContext context, in DropClient message);
 }
 
 /// <summary>
@@ -1177,6 +1204,13 @@ public static class WireDispatch
                 var message = ToClient.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnToClient(context, message);
+                return id;
+            }
+            case DropClient.Id:
+            {
+                var message = DropClient.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnDropClient(context, message);
                 return id;
             }
             default:

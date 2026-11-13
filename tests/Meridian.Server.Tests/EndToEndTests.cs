@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Meridian.Core.World;
 using Meridian.Net;
 using Meridian.Net.Client;
+using Meridian.Persistence;
 using Meridian.Server.Auth;
 using Meridian.Server.Gateway;
 using Meridian.Server.Zone;
@@ -25,11 +26,13 @@ public sealed class EndToEndTests : IDisposable
     private readonly GatewayHost _gateway;
     private readonly Thread _zoneThread;
     private readonly Thread _gatewayThread;
-    private readonly LoginService _logins;
+    private readonly InMemoryGameStore _store = new();
+    private readonly TicketSealer _sealer = new(TicketKey);
+    private readonly AuthService _auth;
 
     public EndToEndTests()
     {
-        _zone = new ZoneHost(new ZoneHostOptions { Port = 0, InternalKey = InternalKey }, _ => { });
+        _zone = new ZoneHost(new ZoneHostOptions { Port = 0, InternalKey = InternalKey }, _store, _ => { });
         _zone.Start();
         _zoneThread = new Thread(() => _zone.Run(_stop.Token)) { IsBackground = true };
         _zoneThread.Start();
@@ -41,9 +44,11 @@ public sealed class EndToEndTests : IDisposable
         _gatewayThread = new Thread(() => _gateway.Run(_stop.Token)) { IsBackground = true };
         _gatewayThread.Start();
 
-        _logins = new LoginService(
-            new AuthOptions { DevPassword = "pw", PublicGatewayPort = _gateway.Port },
-            new TicketSealer(TicketKey),
+        _auth = new AuthService(
+            new AuthOptions { PublicGatewayPort = _gateway.Port },
+            _store,
+            new PasswordHasher(1_000),
+            _sealer,
             TimeProvider.System,
             Meridian.Content.ContentPacks.Embedded);
 
@@ -53,7 +58,7 @@ public sealed class EndToEndTests : IDisposable
     [Fact]
     public void Client_logs_in_moves_and_receives_snapshots()
     {
-        var login = _logins.TryLogin(new LoginRequest("tester", "pw"))!;
+        var login = Play("tester");
         var client = new TestClient();
         using var conn = new GameConnection(client);
         conn.Connect("127.0.0.1", login.GatewayPort, login);
@@ -124,30 +129,99 @@ public sealed class EndToEndTests : IDisposable
     }
 
     [Fact]
-    public void The_profession_chosen_at_login_survives_the_sealed_ticket()
+    public void The_character_plays_as_the_profession_it_was_created_with()
     {
-        var login = _logins.TryLogin(new LoginRequest("healer", "pw", "Medic", "Nightborn"))!;
         var client = new TestClient();
         using var conn = new GameConnection(client);
+        var login = Play("healer", "medic", "nightborn");
         conn.Connect("127.0.0.1", login.GatewayPort, login);
         Pump(conn, () => client.Sheet is not null, "character sheet");
         Assert.Equal((byte)Meridian.Core.Characters.Profession.Medic, client.Sheet!.Value.Profession);
         Assert.Equal((byte)Meridian.Core.Characters.Origin.Nightborn, client.Sheet.Value.Origin);
     }
 
+    /// <summary>The M2.3 promise: what you did is still there when you come back.</summary>
     [Fact]
-    public void Unplayable_professions_are_refused_at_login()
+    public async Task Training_and_position_survive_logging_out_and_back_in()
     {
-        Assert.Null(_logins.TryLogin(new LoginRequest("x1x", "pw", "Sentinel")));   // not in content yet
-        Assert.Null(_logins.TryLogin(new LoginRequest("x2x", "pw", "Wizard")));
-        Assert.Null(_logins.TryLogin(new LoginRequest("x3x", "pw", null, "Heavyworlder")));
-        Assert.NotNull(_logins.TryLogin(new LoginRequest("x4x", "pw", "warden", "nightborn"))); // case-insensitive
+        var first = new TestClient();
+        var play = Play("keeper");
+        CharacterSheet trained;
+        int x;
+        using (var conn = new GameConnection(first))
+        {
+            conn.Connect("127.0.0.1", _gateway.Port, play);
+            Pump(conn, () => first.Sheet is not null, "sheet");
+            conn.Send(new TrainSkill { Stat = (ushort)Meridian.Core.Stats.Stat.Rifle, Points = 5 });
+            conn.Send(new MoveIntent { Sequence = 1, DirX = 32_767 });
+            Pump(conn, () => first.Sheet!.Value.UnspentPoints < 60 && first.Snapshots.Count > 10, "training and movement");
+            conn.Send(new MoveIntent { Sequence = 2 });
+            Pump(conn, () => first.Snapshots.Count > 15, "stop");
+            trained = first.Sheet!.Value;
+            x = first.Snapshots[^1].Entities.Single(e => e.EntityId == first.Welcome!.Value.EntityId).X;
+            conn.Disconnect();
+        }
+        // Wait for the store itself, so the relog below exercises a real load, not the saver's queue.
+        WaitUntil(() => _store.LoadCharacterAsync(play.CharacterId).GetAwaiter().GetResult()!.UnspentPoints == trained.UnspentPoints, "the save on leave");
+
+        var again = new TestClient();
+        using var back = new GameConnection(again);
+        back.Connect("127.0.0.1", _gateway.Port, Play("keeper"));
+        Pump(back, () => again.Sheet is not null, "sheet after relog");
+        Assert.Equal(trained.UnspentPoints, again.Sheet!.Value.UnspentPoints);
+        Assert.Equal(Stat(trained, Meridian.Core.Stats.Stat.Rifle), Stat(again.Sheet.Value, Meridian.Core.Stats.Stat.Rifle));
+        Assert.InRange(again.Welcome!.Value.X, x - 1_000, x + 1_000);
+
+        var stored = (await _store.LoadCharacterAsync(play.CharacterId, TestContext.Current.CancellationToken))!;
+        Assert.Equal(trained.UnspentPoints, stored.UnspentPoints);
+        Assert.Contains(new KeyValuePair<Meridian.Core.Stats.Stat, int>(Meridian.Core.Stats.Stat.Rifle, 5), stored.Trained);
+        Assert.True(stored.Version >= 2, "the zone saved over the created record");
+    }
+
+    [Fact]
+    public void An_instant_reconnect_keeps_progress_that_is_not_saved_yet()
+    {
+        var first = new TestClient();
+        int points;
+        using (var conn = new GameConnection(first))
+        {
+            conn.Connect("127.0.0.1", _gateway.Port, Play("hasty"));
+            Pump(conn, () => first.Sheet is not null, "sheet");
+            conn.Send(new TrainSkill { Stat = (ushort)Meridian.Core.Stats.Stat.Rifle, Points = 7 });
+            Pump(conn, () => first.Sheet!.Value.UnspentPoints < 60, "training");
+            points = first.Sheet!.Value.UnspentPoints;
+            conn.Disconnect();
+        }
+
+        // No waiting for the save: the zone must use its unsaved copy (or the live player, if the
+        // join beats the leave), never the store's older one.
+        var again = new TestClient();
+        using var back = new GameConnection(again);
+        back.Connect("127.0.0.1", _gateway.Port, Play("hasty"));
+        Pump(back, () => again.Sheet is not null, "sheet after reconnect");
+        Assert.Equal(points, again.Sheet!.Value.UnspentPoints);
+    }
+
+    [Fact]
+    public void Logging_in_again_takes_over_and_drops_the_old_session()
+    {
+        var oldClient = new TestClient();
+        using var old = new GameConnection(oldClient);
+        old.Connect("127.0.0.1", _gateway.Port, Play("twice"));
+        Pump(old, () => oldClient.Welcome is not null, "first session");
+
+        var newClient = new TestClient();
+        using var fresh = new GameConnection(newClient);
+        fresh.Connect("127.0.0.1", _gateway.Port, Play("twice"));
+        Pump([old, fresh], () => newClient.Welcome is not null && old.DisconnectReason is not null, "takeover");
+        Assert.Equal("Logged in from another session.", old.DisconnectReason);
+        Assert.Single(_zone.Simulation.Players, p => p.Name == "twice");
     }
 
     [Fact]
     public void Forged_ticket_is_rejected_with_a_reason()
     {
-        var login = _logins.TryLogin(new LoginRequest("mallory", "pw"))!;
+        var login = Play("mallory");
         var forged = login with { Ticket = Convert.ToBase64String(RandomNumberGenerator.GetBytes(100)) };
         using var conn = new GameConnection(new TestClient());
         conn.Connect("127.0.0.1", login.GatewayPort, forged);
@@ -158,7 +232,7 @@ public sealed class EndToEndTests : IDisposable
     [Fact]
     public void A_ticket_works_only_once()
     {
-        var login = _logins.TryLogin(new LoginRequest("replayer", "pw"))!;
+        var login = Play("replayer");
         var first = new TestClient();
         using var c1 = new GameConnection(first);
         c1.Connect("127.0.0.1", login.GatewayPort, login);
@@ -168,14 +242,6 @@ public sealed class EndToEndTests : IDisposable
         c2.Connect("127.0.0.1", login.GatewayPort, login);
         Pump(c2, () => c2.DisconnectReason is not null, "replay rejection");
         Assert.Equal("Login already used. Please log in again.", c2.DisconnectReason);
-    }
-
-    [Fact]
-    public void Wrong_password_gets_no_ticket()
-    {
-        Assert.Null(_logins.TryLogin(new LoginRequest("tester", "nope")));
-        Assert.Null(_logins.TryLogin(new LoginRequest("x", "pw"))); // name too short
-        Assert.Null(_logins.TryLogin(new LoginRequest("bad name", "pw")));
     }
 
     [Fact]
@@ -197,12 +263,26 @@ public sealed class EndToEndTests : IDisposable
         _gatewayThread.Join();
         _gateway.Dispose();
         _zone.Dispose();
+        _sealer.Dispose();
         _stop.Dispose();
     }
 
+    /// <summary>Registers (if needed), logs in, creates the character (if needed) and gets a ticket: account and character share a name.</summary>
+    private PlayResponse Play(string name, string profession = "operative", string origin = "baseline")
+    {
+        var credentials = new Credentials(name, "password1");
+        _auth.RegisterAsync(credentials).GetAwaiter().GetResult();
+        var login = _auth.LoginAsync(credentials).GetAwaiter().GetResult().Value!;
+        var character = login.Characters.FirstOrDefault(c => c.Name == name)
+            ?? _auth.CreateCharacterAsync(login.SessionToken, new CreateCharacterRequest(name, profession, origin)).GetAwaiter().GetResult().Value!;
+        return _auth.PlayAsync(login.SessionToken, new PlayRequest(character.Id)).GetAwaiter().GetResult().Value!;
+    }
+
+    private static int Stat(CharacterSheet sheet, Meridian.Core.Stats.Stat stat) => sheet.Stats!.Single(s => s.Stat == (ushort)stat).BaseValue;
+
     private GameConnection Connect(TestClient client, string name)
     {
-        var login = _logins.TryLogin(new LoginRequest(name, "pw"))!;
+        var login = Play(name);
         var conn = new GameConnection(client);
         conn.Connect("127.0.0.1", login.GatewayPort, login);
         return conn;

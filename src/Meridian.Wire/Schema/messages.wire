@@ -193,8 +193,7 @@ message 1000 PlayerJoin internal reliable_ordered
   u32 connectionId
   u64 accountId
   string(32) name
-  u8 profession
-  u8 origin
+  u64 characterId
 end
 
 message 1001 PlayerLeave internal reliable_ordered
@@ -212,4 +211,11 @@ message 1003 ToClient internal reliable_ordered
   u32 connectionId
   u8 deliveryMode
   bytes(16000) payload
+end
+
+# Zone → gateway: end this client's session with a reason it can show (character could not
+# be loaded, or the same character logged in again elsewhere).
+message 1004 DropClient internal reliable_ordered
+  u32 connectionId
+  string(160) reason
 end

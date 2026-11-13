@@ -31,7 +31,7 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     private uint _target;
     private bool _attacking;
 
-    public Bot(int index, LoginResponse login, string host, int port, bool hunt)
+    public Bot(int index, PlayResponse login, string host, int port, bool hunt)
     {
         Index = index;
         _hunt = hunt;
