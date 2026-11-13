@@ -130,6 +130,7 @@ public sealed record ProtocolTemplate(
 
 /// <summary>A creature kind.</summary>
 /// <param name="Id">Stable id; also the client's model selector.</param>
+/// <param name="Xp">Experience each player who fought it earns when it dies.</param>
 public sealed record MobDef(
     ushort Id,
     string Key,
@@ -140,7 +141,8 @@ public sealed record MobDef(
     int AggroRadiusMm,
     int LeashMm,
     int SpeedMmPerSecond,
-    int RespawnMs)
+    int RespawnMs,
+    int Xp)
 {
     public void ApplyStats(StatBlock block)
     {
@@ -158,15 +160,5 @@ public sealed record SpawnGroup(string MobKey, int Count, Position Center, int I
 
 public sealed record ZoneDef(uint Id, string Key, string Name, ZoneBounds Bounds, IReadOnlyList<SpawnGroup> Spawns);
 
-/// <summary>What a brand-new character starts with (until character creation exists).</summary>
-public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats, string StartingWeaponKey, int StartingWeaponQl)
-{
-    public void ApplyStats(StatBlock block)
-    {
-        ArgumentNullException.ThrowIfNull(block);
-        foreach (var (stat, value) in Stats)
-        {
-            block.SetBase(stat, value);
-        }
-    }
-}
+/// <summary>Stats every new character starts with, before origin and profession add theirs.</summary>
+public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats);

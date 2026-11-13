@@ -75,7 +75,10 @@ public static class ContentPacks
             dto.Protocols.Select(ToModel),
             dto.Mobs.Select(ToModel),
             dto.Zones.Select(ToModel),
-            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character"), dto.NewCharacter.StartingWeapon, dto.NewCharacter.StartingWeaponQl),
+            dto.Professions.Select(ToModel),
+            dto.Origins.Select(ToModel),
+            ToModel(dto.Progression),
+            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character")),
             hash);
     }
 
@@ -90,7 +93,10 @@ public static class ContentPacks
             pack.Protocols.All.Select(ToDto).ToList(),
             pack.Mobs.All.Select(ToDto).ToList(),
             pack.Zones.All.Select(ToDto).ToList(),
-            new NewCharacterDto(Sorted(pack.NewCharacter.Stats), pack.NewCharacter.StartingWeaponKey, pack.NewCharacter.StartingWeaponQl));
+            pack.Professions.All.Select(ToDto).ToList(),
+            pack.Origins.All.Select(ToDto).ToList(),
+            ToDto(pack.Progression),
+            new NewCharacterDto(Sorted(pack.NewCharacter.Stats)));
     }
 
     // ------------------------------------------------------------------ DTO -> model
@@ -137,7 +143,42 @@ public static class ContentPacks
             (ushort)d.Id, d.Key, d.Name, d.Level, Stats(d.Stats, where),
             new WeaponProfile(a.Name, Parse<Stat>(a.AttackSkill, where), Parse<Stat>(a.Initiative, where), Parse<Stat>(a.Defence, where),
                 Parse<DamageType>(a.DamageType, where), a.MinDamage, a.MaxDamage, a.AttackTimeMs, a.RangeMm),
-            d.AggroRadiusMm, d.LeashMm, d.SpeedMmPerSecond, d.RespawnMs);
+            d.AggroRadiusMm, d.LeashMm, d.SpeedMmPerSecond, d.RespawnMs, d.Xp);
+    }
+
+    /// <summary>Validates and converts one profession.</summary>
+    public static ProfessionDef ToModel(ProfessionDto d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        var where = $"profession '{d.Key}'";
+        return new ProfessionDef(
+            ParseId<Profession>(d.Id, where), d.Key, d.Name,
+            d.GroupTiers.ToDictionary(kv => Parse<SkillGroup>(kv.Key, where), kv => Parse<CostTier>(kv.Value, where)),
+            d.SkillTiers.ToDictionary(kv => Parse<Stat>(kv.Key, where), kv => Parse<CostTier>(kv.Value, where)),
+            Stats(d.StartingSkills, where),
+            d.StartingWeapon, d.StartingWeaponQl);
+    }
+
+    /// <summary>Validates and converts one origin.</summary>
+    public static OriginDef ToModel(OriginDto d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        var where = $"origin '{d.Key}'";
+        return new OriginDef(
+            ParseId<Origin>(d.Id, where), d.Key, d.Name,
+            Stats(d.Attributes, where),
+            d.AttributeTiers.ToDictionary(kv => Parse<Stat>(kv.Key, where), kv => Parse<CostTier>(kv.Value, where)),
+            d.BonusPointsPerLevel);
+    }
+
+    /// <summary>Validates and converts the progression rules.</summary>
+    public static ProgressionDef ToModel(ProgressionDto d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        const string where = "progression";
+        return new ProgressionDef(
+            d.MaxLevel, Curve(d.XpToNext, where), Curve(d.PointsPerLevel, where), d.StartingPoints,
+            d.Tiers.ToDictionary(kv => Parse<CostTier>(kv.Key, where), kv => new TierRule(kv.Value.CostPerPoint, kv.Value.CapPerLevel)));
     }
 
     /// <summary>Converts one zone.</summary>
@@ -171,8 +212,22 @@ public static class ContentPacks
             m.Id, m.Key, m.Name, m.Level, Sorted(m.Stats),
             new AttackDto(a.Name, a.AttackSkill.ToString(), a.InitiativeSkill.ToString(), a.DefenceSkill.ToString(), a.DamageType.ToString(),
                 a.BaseAttackTimeMs, a.RangeMm, a.MinDamage, a.MaxDamage),
-            m.AggroRadiusMm, m.LeashMm, m.SpeedMmPerSecond, m.RespawnMs);
+            m.AggroRadiusMm, m.LeashMm, m.SpeedMmPerSecond, m.RespawnMs, m.Xp);
     }
+
+    private static ProfessionDto ToDto(ProfessionDef p) => new(
+        (int)p.Id, p.Key, p.Name,
+        SortedNames(p.GroupTiers), SortedNames(p.SkillTiers), Sorted(p.StartingSkills),
+        p.StartingWeaponKey, p.StartingWeaponQl);
+
+    private static OriginDto ToDto(OriginDef o) => new(
+        (int)o.Id, o.Key, o.Name, Sorted(o.Attributes), SortedNames(o.AttributeTiers), o.BonusPointsPerLevel);
+
+    private static ProgressionDto ToDto(ProgressionDef p) => new(
+        p.MaxLevel, Anchors(p.XpToNext), Anchors(p.PointsPerLevel), p.StartingPoints,
+        new SortedDictionary<string, TierRuleDto>(
+            p.Tiers.ToDictionary(kv => kv.Key.ToString(), kv => new TierRuleDto(kv.Value.CostPerPoint, kv.Value.CapPerLevel)),
+            StringComparer.Ordinal));
 
     private static ZoneDto ToDto(ZoneDef z) => new(
         z.Id, z.Key, z.Name,
@@ -192,6 +247,18 @@ public static class ContentPacks
         }
         throw new InvalidDataException($"{where}: '{text}' is not a valid {typeof(T).Name}.");
     }
+
+    private static T ParseId<T>(int id, string where)
+        where T : struct, Enum
+    {
+        var value = (T)Enum.ToObject(typeof(T), id);
+        return Enum.IsDefined(value) ? value : throw new InvalidDataException($"{where}: id {id} is not a valid {typeof(T).Name}.");
+    }
+
+    private static SortedDictionary<string, string> SortedNames<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> source)
+        where TKey : struct, Enum
+        where TValue : struct, Enum =>
+        new(source.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value.ToString()), StringComparer.Ordinal);
 
     private static QlCurve Curve(List<AnchorDto> anchors, string where)
     {

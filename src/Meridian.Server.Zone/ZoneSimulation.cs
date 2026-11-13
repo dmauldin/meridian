@@ -101,8 +101,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         _outbox = outbox;
         _content = content ?? ContentPacks.Embedded;
         _zone = _content.Zones[options.ZoneKey];
-        var start = _content.NewCharacter;
-        _starterWeapon = _content.Items[start.StartingWeaponKey].WeaponAt(start.StartingWeaponQl)!;
+        _starterWeapon = CharacterBuild.Create(_content, Profession.Operative, Origin.Baseline).StartingWeapon(_content);
         _rng = new DeterministicRandom(options.Seed);
         _grid = new SpatialGrid(options.GridCellMm);
         SpawnMobs();
@@ -129,8 +128,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         {
             throw new InvalidOperationException($"{client} already joined.");
         }
-        var character = new Character(Profession.Operative, Origin.Baseline);
-        _content.NewCharacter.ApplyStats(character.Stats);
+        var character = CharacterBuild.Create(_content, Profession.Operative, Origin.Baseline).Character;
 
         var player = new Player(_nextEntityId++, client, accountId, name, character, _starterWeapon)
         {

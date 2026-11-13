@@ -15,3 +15,17 @@ Rules:
 - QL curves are maps of quality level to value, e.g. `{ 1: 8, 300: 180 }`; values in between
   are interpolated (see `QlCurve`).
 - Stat names are the `Stat` enum names, e.g. `Rifle`, `KineticFlux`, `MaxHealth`.
+
+## Characters
+
+- `progression.yaml`: level cap, starting skill points, XP to next level and points per level
+  (both QL curves keyed by level), and the cost tiers (`cheap`, `normal`, `expensive`), each
+  with `cost_per_point` and `cap_per_level`. A tier left out of a character's costs is `normal`.
+- `professions.yaml`: one entry per playable profession (`profession:` is the `Profession`
+  enum name). `group_costs` sets a tier per skill group (`Body`, `Melee`, `Ranged`,
+  `Initiative`, `Defence`, `Lattice`, `Tech`); `skill_costs` overrides single skills; `locked`
+  makes a skill untrainable. `starting_skills` are added to `new_character.yaml`'s values, and
+  `starting_weapon` is the kit weapon.
+- `origins.yaml`: starting attributes, attribute cost tiers and `bonus_points_per_level`.
+  Attributes are priced only by origin, never by profession.
+- `mobs`: `xp` is what each player on the mob's threat list earns when it dies.
