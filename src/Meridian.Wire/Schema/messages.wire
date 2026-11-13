@@ -58,6 +58,12 @@ message 105 SnapshotAck server_bound unreliable_sequenced
   u32 tick
 end
 
+# Spend skill points to raise a stat's base value by `points`.
+message 106 TrainSkill server_bound reliable_ordered
+  u16 stat
+  u16 points
+end
+
 # ---------------------------------------------------------------- server → client
 
 # contentHash identifies the server's content pack; a client with different data must not play.
@@ -150,12 +156,45 @@ message 210 DeltaSnapshot client_bound unreliable_sequenced
   list<varu32>(128) removed
 end
 
+struct StatValue
+  u16 stat
+  i32 baseValue
+  i32 value
+end
+
+# The receiving player's character: progression and every stat (base and effective).
+# Sent when anything in it changes, at most once per tick. Costs and caps are not sent: the
+# client computes them with the same CharacterBuild rules from profession, origin and level.
+message 211 CharacterSheet client_bound reliable_ordered
+  u8 profession
+  u8 origin
+  u16 level
+  u32 xp
+  u32 xpToNext
+  i32 unspentPoints
+  list<StatValue>(96) stats
+end
+
+message 212 XpGained client_bound reliable_ordered
+  u32 amount
+  u16 level
+  u16 levelsGained
+end
+
+# kind: 1 = refused (why an intent did nothing), 2 = info.
+message 213 Notice client_bound reliable_unordered
+  u8 kind
+  string(160) text
+end
+
 # ---------------------------------------------------------------- gateway ↔ zone
 
 message 1000 PlayerJoin internal reliable_ordered
   u32 connectionId
   u64 accountId
   string(32) name
+  u8 profession
+  u8 origin
 end
 
 message 1001 PlayerLeave internal reliable_ordered

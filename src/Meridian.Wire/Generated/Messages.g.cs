@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0x1EB228FEC2A3B1C7UL;
+    public const ulong Hash = 0x9F2DD4CDE2D0243AUL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -199,6 +199,35 @@ public partial struct SnapshotAck : IWireMessage<SnapshotAck>
     {
         var value = default(SnapshotAck);
         value.Tick = reader.ReadU32();
+        return value;
+    }
+}
+
+public partial struct TrainSkill : IWireMessage<TrainSkill>
+{
+    public const ushort Id = 106;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<TrainSkill>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<TrainSkill>.Delivery => Delivery.ReliableOrdered;
+
+    public ushort Stat;
+
+    public ushort Points;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU16(Stat);
+        writer.WriteU16(Points);
+    }
+
+    public static TrainSkill Read(ref WireReader reader)
+    {
+        var value = default(TrainSkill);
+        value.Stat = reader.ReadU16();
+        value.Points = reader.ReadU16();
         return value;
     }
 }
@@ -608,6 +637,152 @@ public partial struct DeltaSnapshot : IWireMessage<DeltaSnapshot>
     }
 }
 
+public partial struct StatValue : IWireStruct<StatValue>
+{
+    public ushort Stat;
+
+    public int BaseValue;
+
+    public int Value;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU16(Stat);
+        writer.WriteI32(BaseValue);
+        writer.WriteI32(Value);
+    }
+
+    public static StatValue Read(ref WireReader reader)
+    {
+        var value = default(StatValue);
+        value.Stat = reader.ReadU16();
+        value.BaseValue = reader.ReadI32();
+        value.Value = reader.ReadI32();
+        return value;
+    }
+}
+
+public partial struct CharacterSheet : IWireMessage<CharacterSheet>
+{
+    public const ushort Id = 211;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<CharacterSheet>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<CharacterSheet>.Delivery => Delivery.ReliableOrdered;
+
+    public byte Profession;
+
+    public byte Origin;
+
+    public ushort Level;
+
+    public uint Xp;
+
+    public uint XpToNext;
+
+    public int UnspentPoints;
+
+    public StatValue[]? Stats;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Profession);
+        writer.WriteU8(Origin);
+        writer.WriteU16(Level);
+        writer.WriteU32(Xp);
+        writer.WriteU32(XpToNext);
+        writer.WriteI32(UnspentPoints);
+        var statsItems = Stats ?? [];
+        writer.WriteCount(statsItems.Length, 96);
+        foreach (var item in statsItems)
+        {
+            item.Write(ref writer);
+        }
+    }
+
+    public static CharacterSheet Read(ref WireReader reader)
+    {
+        var value = default(CharacterSheet);
+        value.Profession = reader.ReadU8();
+        value.Origin = reader.ReadU8();
+        value.Level = reader.ReadU16();
+        value.Xp = reader.ReadU32();
+        value.XpToNext = reader.ReadU32();
+        value.UnspentPoints = reader.ReadI32();
+        var statsCount = reader.ReadCount(96);
+        value.Stats = new StatValue[statsCount];
+        for (var i = 0; i < statsCount; i++)
+        {
+            value.Stats[i] = StatValue.Read(ref reader);
+        }
+        return value;
+    }
+}
+
+public partial struct XpGained : IWireMessage<XpGained>
+{
+    public const ushort Id = 212;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<XpGained>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<XpGained>.Delivery => Delivery.ReliableOrdered;
+
+    public uint Amount;
+
+    public ushort Level;
+
+    public ushort LevelsGained;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(Amount);
+        writer.WriteU16(Level);
+        writer.WriteU16(LevelsGained);
+    }
+
+    public static XpGained Read(ref WireReader reader)
+    {
+        var value = default(XpGained);
+        value.Amount = reader.ReadU32();
+        value.Level = reader.ReadU16();
+        value.LevelsGained = reader.ReadU16();
+        return value;
+    }
+}
+
+public partial struct Notice : IWireMessage<Notice>
+{
+    public const ushort Id = 213;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<Notice>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<Notice>.Delivery => Delivery.ReliableUnordered;
+
+    public byte Kind;
+
+    public string? Text;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Kind);
+        writer.WriteString(Text, 160);
+    }
+
+    public static Notice Read(ref WireReader reader)
+    {
+        var value = default(Notice);
+        value.Kind = reader.ReadU8();
+        value.Text = reader.ReadString(160);
+        return value;
+    }
+}
+
 public partial struct PlayerJoin : IWireMessage<PlayerJoin>
 {
     public const ushort Id = 1000;
@@ -624,11 +799,17 @@ public partial struct PlayerJoin : IWireMessage<PlayerJoin>
 
     public string? Name;
 
+    public byte Profession;
+
+    public byte Origin;
+
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteU32(ConnectionId);
         writer.WriteU64(AccountId);
         writer.WriteString(Name, 32);
+        writer.WriteU8(Profession);
+        writer.WriteU8(Origin);
     }
 
     public static PlayerJoin Read(ref WireReader reader)
@@ -637,6 +818,8 @@ public partial struct PlayerJoin : IWireMessage<PlayerJoin>
         value.ConnectionId = reader.ReadU32();
         value.AccountId = reader.ReadU64();
         value.Name = reader.ReadString(32);
+        value.Profession = reader.ReadU8();
+        value.Origin = reader.ReadU8();
         return value;
     }
 }
@@ -742,6 +925,8 @@ public interface IServerBoundHandler<in TContext>
     void OnSetAttack(TContext context, in SetAttack message);
 
     void OnSnapshotAck(TContext context, in SnapshotAck message);
+
+    void OnTrainSkill(TContext context, in TrainSkill message);
 }
 
 /// <summary>Receives ClientBound messages from <see cref="WireDispatch"/>.</summary>
@@ -766,6 +951,12 @@ public interface IClientBoundHandler<in TContext>
     void OnRespawned(TContext context, in Respawned message);
 
     void OnDeltaSnapshot(TContext context, in DeltaSnapshot message);
+
+    void OnCharacterSheet(TContext context, in CharacterSheet message);
+
+    void OnXpGained(TContext context, in XpGained message);
+
+    void OnNotice(TContext context, in Notice message);
 }
 
 /// <summary>Receives Internal messages from <see cref="WireDispatch"/>.</summary>
@@ -834,6 +1025,13 @@ public static class WireDispatch
                 var message = SnapshotAck.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnSnapshotAck(context, message);
+                return id;
+            }
+            case TrainSkill.Id:
+            {
+                var message = TrainSkill.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnTrainSkill(context, message);
                 return id;
             }
             default:
@@ -917,6 +1115,27 @@ public static class WireDispatch
                 var message = DeltaSnapshot.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnDeltaSnapshot(context, message);
+                return id;
+            }
+            case CharacterSheet.Id:
+            {
+                var message = CharacterSheet.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnCharacterSheet(context, message);
+                return id;
+            }
+            case XpGained.Id:
+            {
+                var message = XpGained.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnXpGained(context, message);
+                return id;
+            }
+            case Notice.Id:
+            {
+                var message = Notice.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnNotice(context, message);
                 return id;
             }
             default:

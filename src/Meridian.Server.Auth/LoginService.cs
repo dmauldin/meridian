@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Meridian.Net;
+using Meridian.Core.Content;
 using Meridian.Net.Client;
 
 namespace Meridian.Server.Auth;
@@ -24,8 +25,11 @@ public sealed record AuthOptions
 }
 
 /// <summary>Issues session keys and sealed tickets. Thread-safe; ASP.NET calls it concurrently.</summary>
-public sealed partial class LoginService(AuthOptions options, TicketSealer sealer, TimeProvider clock)
+public sealed partial class LoginService(AuthOptions options, TicketSealer sealer, TimeProvider clock, ContentPack content)
 {
+    public const string DefaultProfession = "Operative";
+    public const string DefaultOrigin = "Baseline";
+
     private readonly ConcurrentDictionary<string, ulong> _accounts = new(StringComparer.OrdinalIgnoreCase);
     private long _nextAccountId;
     private readonly Lock _sealLock = new();
@@ -45,6 +49,11 @@ public sealed partial class LoginService(AuthOptions options, TicketSealer seale
             return null;
         }
 
+        if (!TryChooseProfession(request.Profession, out var profession) || !TryChooseOrigin(request.Origin, out var origin))
+        {
+            return null;
+        }
+
         var accountId = _accounts.GetOrAdd(request.Username, _ => (ulong)Interlocked.Increment(ref _nextAccountId));
         var sessionKey = RandomNumberGenerator.GetBytes(SessionCipher.KeyBytes);
         var ticket = new LoginTicket(
@@ -52,7 +61,9 @@ public sealed partial class LoginService(AuthOptions options, TicketSealer seale
             accountId,
             request.Username,
             sessionKey,
-            clock.GetUtcNow().Add(options.TicketLifetime).ToUnixTimeSeconds());
+            clock.GetUtcNow().Add(options.TicketLifetime).ToUnixTimeSeconds(),
+            (byte)profession,
+            (byte)origin);
 
         byte[] sealedTicket;
         lock (_sealLock)
@@ -68,6 +79,25 @@ public sealed partial class LoginService(AuthOptions options, TicketSealer seale
             Convert.ToBase64String(sessionKey),
             Convert.ToBase64String(sealedTicket));
     }
+
+    // Development-only character choice until characters are stored (M2.3): only what content
+    // defines is playable; names are matched case-insensitively against content keys.
+    private bool TryChooseProfession(string? requested, out int id)
+    {
+        var found = content.Professions.TryGet(KeyOf(requested, DefaultProfession), out var def);
+        id = found ? (int)def!.Id : 0;
+        return found;
+    }
+
+    private bool TryChooseOrigin(string? requested, out int id)
+    {
+        var found = content.Origins.TryGet(KeyOf(requested, DefaultOrigin), out var def);
+        id = found ? (int)def!.Id : 0;
+        return found;
+    }
+
+    private static string KeyOf(string? requested, string fallback) =>
+        (string.IsNullOrWhiteSpace(requested) ? fallback : requested.Trim()).ToLowerInvariant();
 
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9]{2,23}$")]
     private static partial Regex UsernamePattern();

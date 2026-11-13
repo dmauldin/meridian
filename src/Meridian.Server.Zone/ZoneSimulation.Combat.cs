@@ -233,6 +233,27 @@ public sealed partial class ZoneSimulation
         }
     }
 
+    /// <summary>
+    /// Every player on the mob's threat list (anyone who fought it, misses included) earns its
+    /// full experience: grouping never costs anyone XP. A level-up heals to the new maximum.
+    /// </summary>
+    private void AwardExperience(Mob mob)
+    {
+        foreach (var id in mob.Threat.Keys.Order())
+        {
+            if (Find(id) is not Player p)
+            {
+                continue;
+            }
+            var levels = p.Build.AddXp(mob.Template.Xp);
+            Send(p, new XpGained { Amount = (uint)mob.Template.Xp, Level = (ushort)p.Build.Level, LevelsGained = (ushort)levels });
+            if (levels > 0 && !p.Dead)
+            {
+                p.Health = p.MaxHealth;
+            }
+        }
+    }
+
     /// <summary>CombatEvent.outcome values.</summary>
     private const byte OutcomeMiss = 0, OutcomeHit = 1, OutcomeCritical = 2, OutcomeEvaded = 3;
 
@@ -291,6 +312,7 @@ public sealed partial class ZoneSimulation
         switch (victim)
         {
             case Mob mob:
+                AwardExperience(mob);
                 mob.State = MobState.Dead;
                 mob.Threat.Clear();
                 mob.TargetId = 0;

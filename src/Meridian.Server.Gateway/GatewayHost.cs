@@ -217,7 +217,14 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         var session = new ClientSession(_nextConnectionId++, peer, ticket, _options.MaxPacketsPerSecond);
         _byPeer[peer.Id] = session;
         _byConnection[session.ConnectionId] = session;
-        SendToZone(new PlayerJoin { ConnectionId = session.ConnectionId, AccountId = ticket.AccountId, Name = ticket.CharacterName });
+        SendToZone(new PlayerJoin
+        {
+            ConnectionId = session.ConnectionId,
+            AccountId = ticket.AccountId,
+            Name = ticket.CharacterName,
+            Profession = ticket.Profession,
+            Origin = ticket.Origin,
+        });
     }
 
     private void OnClientPacket(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
@@ -326,6 +333,10 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
 
         public void OnSnapshotAck(int context, in SnapshotAck message)
+        {
+        }
+
+        public void OnTrainSkill(int context, in TrainSkill message)
         {
         }
     }
