@@ -167,6 +167,3 @@ the sealed ticket; characters are still created fresh on each join.
   front of it; session keys must never travel in clear.
 - **Only four professions and two origins** are in content; the remaining ids are reserved.
   Asking for one at login is refused.
-- **Single-tick spikes on the shared CI box.** The load gate's 5 s windows hold 100 ticks, so
-  their p99 is the second-worst tick; an isolated 8–30 ms pause (seen on this branch and its
-  parent alike) can fail a window. Worth computing p99 over the whole run instead.
