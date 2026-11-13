@@ -1,0 +1,420 @@
+{
+  "format": 1,
+  "items": [
+    {
+      "id": 1001,
+      "key": "rifle.combine_carbine",
+      "name": "Combine Issue Carbine",
+      "slot": "TwoHand",
+      "minQl": 1,
+      "maxQl": 300,
+      "requirements": [
+        {
+          "stat": "Rifle",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 4
+            },
+            {
+              "ql": 300,
+              "value": 1150
+            }
+          ]
+        }
+      ],
+      "professions": [],
+      "effects": [],
+      "weapon": {
+        "attackSkill": "Rifle",
+        "initiative": "RangedInit",
+        "defence": "EvadeRanged",
+        "damageType": "Projectile",
+        "attackTimeMs": 1500,
+        "rangeMm": 25000,
+        "minDamage": [
+          {
+            "ql": 1,
+            "value": 8
+          },
+          {
+            "ql": 300,
+            "value": 180
+          }
+        ],
+        "maxDamage": [
+          {
+            "ql": 1,
+            "value": 20
+          },
+          {
+            "ql": 300,
+            "value": 520
+          }
+        ]
+      }
+    },
+    {
+      "id": 1002,
+      "key": "rifle.kestrel_mk2",
+      "name": "Kestrel Mk2",
+      "slot": "TwoHand",
+      "minQl": 1,
+      "maxQl": 300,
+      "requirements": [
+        {
+          "stat": "Agility",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 30
+            },
+            {
+              "ql": 300,
+              "value": 600
+            }
+          ]
+        },
+        {
+          "stat": "Rifle",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 40
+            },
+            {
+              "ql": 300,
+              "value": 1300
+            }
+          ]
+        }
+      ],
+      "professions": [
+        "Operative",
+        "Trooper"
+      ],
+      "effects": [],
+      "weapon": {
+        "attackSkill": "Rifle",
+        "initiative": "RangedInit",
+        "defence": "EvadeRanged",
+        "damageType": "Projectile",
+        "attackTimeMs": 1400,
+        "rangeMm": 32000,
+        "minDamage": [
+          {
+            "ql": 1,
+            "value": 14
+          },
+          {
+            "ql": 300,
+            "value": 260
+          }
+        ],
+        "maxDamage": [
+          {
+            "ql": 1,
+            "value": 30
+          },
+          {
+            "ql": 300,
+            "value": 700
+          }
+        ]
+      }
+    },
+    {
+      "id": 2001,
+      "key": "armor.marksman_gloves",
+      "name": "Marksman Gloves",
+      "slot": "Hands",
+      "minQl": 1,
+      "maxQl": 300,
+      "requirements": [
+        {
+          "stat": "Agility",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 20
+            },
+            {
+              "ql": 300,
+              "value": 520
+            }
+          ]
+        }
+      ],
+      "professions": [],
+      "effects": [
+        {
+          "stat": "Rifle",
+          "kind": "Flat",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 5
+            },
+            {
+              "ql": 300,
+              "value": 80
+            }
+          ]
+        },
+        {
+          "stat": "ProjectileAC",
+          "kind": "Flat",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 4
+            },
+            {
+              "ql": 300,
+              "value": 240
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3001,
+      "key": "implant.ocular_reflex",
+      "name": "Ocular Reflex Implant",
+      "slot": "ImplantEye",
+      "minQl": 1,
+      "maxQl": 300,
+      "requirements": [
+        {
+          "stat": "Agility",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 10
+            },
+            {
+              "ql": 300,
+              "value": 400
+            }
+          ]
+        }
+      ],
+      "professions": [],
+      "effects": [
+        {
+          "stat": "Agility",
+          "kind": "Flat",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 3
+            },
+            {
+              "ql": 300,
+              "value": 60
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "lines": [
+    {
+      "id": 1,
+      "key": "rifle_enhancement",
+      "name": "Rifle Enhancement"
+    },
+    {
+      "id": 2,
+      "key": "reflex_boost",
+      "name": "Reflex Boost"
+    },
+    {
+      "id": 3,
+      "key": "threat_presence",
+      "name": "Threat Presence"
+    }
+  ],
+  "protocols": [
+    {
+      "id": 5001,
+      "key": "buff.rifle_enhancement_1",
+      "name": "Rifle Enhancement I",
+      "lineId": 1,
+      "strength": 1,
+      "latticeCost": 4,
+      "energyCost": 10,
+      "durationMs": 600000,
+      "target": "AnyPlayer",
+      "professions": [
+        "Operative",
+        "Trooper"
+      ],
+      "requirements": {
+        "KineticFlux": 20
+      },
+      "effects": [
+        {
+          "stat": "Rifle",
+          "kind": "Flat",
+          "value": 15
+        }
+      ]
+    },
+    {
+      "id": 5002,
+      "key": "buff.rifle_enhancement_2",
+      "name": "Rifle Enhancement II",
+      "lineId": 1,
+      "strength": 2,
+      "latticeCost": 8,
+      "energyCost": 25,
+      "durationMs": 600000,
+      "target": "AnyPlayer",
+      "professions": [
+        "Operative",
+        "Trooper"
+      ],
+      "requirements": {
+        "KineticFlux": 120
+      },
+      "effects": [
+        {
+          "stat": "Rifle",
+          "kind": "Flat",
+          "value": 40
+        },
+        {
+          "stat": "AimedShot",
+          "kind": "Flat",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": 5101,
+      "key": "buff.reflex_boost_1",
+      "name": "Reflex Boost I",
+      "lineId": 2,
+      "strength": 1,
+      "latticeCost": 5,
+      "energyCost": 15,
+      "durationMs": 600000,
+      "target": "AnyPlayer",
+      "professions": [
+        "Medic"
+      ],
+      "requirements": {
+        "BioWeaving": 25
+      },
+      "effects": [
+        {
+          "stat": "Agility",
+          "kind": "Flat",
+          "value": 20
+        },
+        {
+          "stat": "EvadeRanged",
+          "kind": "Flat",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": 5201,
+      "key": "buff.intimidating_presence",
+      "name": "Intimidating Presence",
+      "lineId": 3,
+      "strength": 1,
+      "latticeCost": 6,
+      "energyCost": 20,
+      "durationMs": 900000,
+      "target": "Self",
+      "professions": [
+        "Warden"
+      ],
+      "requirements": {
+        "MindCraft": 15
+      },
+      "effects": [
+        {
+          "stat": "ThreatModifier",
+          "kind": "Flat",
+          "value": 5000
+        }
+      ]
+    }
+  ],
+  "mobs": [
+    {
+      "id": 1,
+      "key": "mob.glasswind_skitter",
+      "name": "Glasswind Skitter",
+      "level": 3,
+      "stats": {
+        "BodyDevelopment": 30,
+        "EvadeClose": 20,
+        "EvadeRanged": 20,
+        "MeleeAC": 15,
+        "MeleeInit": 0,
+        "ProjectileAC": 15,
+        "Stamina": 30,
+        "Unarmed": 40
+      },
+      "attack": {
+        "name": "Glass Mandibles",
+        "attackSkill": "Unarmed",
+        "initiative": "MeleeInit",
+        "defence": "EvadeClose",
+        "damageType": "Melee",
+        "attackTimeMs": 2000,
+        "rangeMm": 3000,
+        "minDamage": 5,
+        "maxDamage": 12
+      },
+      "aggroRadiusMm": 8000,
+      "leashMm": 40000,
+      "speedMmPerSecond": 4000,
+      "respawnMs": 10000
+    }
+  ],
+  "zones": [
+    {
+      "id": 1,
+      "key": "glasswind_flats",
+      "name": "Glasswind Flats",
+      "bounds": {
+        "minX": -2000000,
+        "minZ": -2000000,
+        "maxX": 2000000,
+        "maxZ": 2000000
+      },
+      "spawns": [
+        {
+          "mobKey": "mob.glasswind_skitter",
+          "count": 40,
+          "centerX": 0,
+          "centerZ": 0,
+          "innerRadiusMm": 40000,
+          "outerRadiusMm": 120000
+        }
+      ]
+    }
+  ],
+  "newCharacter": {
+    "stats": {
+      "BodyDevelopment": 10,
+      "EvadeClose": 20,
+      "EvadeRanged": 20,
+      "Level": 1,
+      "MeleeAC": 10,
+      "ProjectileAC": 10,
+      "RangedInit": 10,
+      "Rifle": 30,
+      "RunSpeed": 5000,
+      "Stamina": 20
+    },
+    "startingWeapon": "rifle.combine_carbine",
+    "startingWeaponQl": 1
+  }
+}

@@ -1,0 +1,4 @@
+# Stacking lines. Only the strongest Protocol of a line is active on a target.
+- { id: 1, key: rifle_enhancement, name: Rifle Enhancement }
+- { id: 2, key: reflex_boost, name: Reflex Boost }
+- { id: 3, key: threat_presence, name: Threat Presence }

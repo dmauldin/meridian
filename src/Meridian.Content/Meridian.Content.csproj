@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The compiled content pack, embedded, plus its JSON mapping. Server and client load the same bytes. -->
+  <ItemGroup>
+    <ProjectReference Include="../Meridian.Core/Meridian.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../content/meridian.pack.json" LogicalName="meridian.pack.json" Condition="Exists('../../content/meridian.pack.json')" />
+  </ItemGroup>
+</Project>
