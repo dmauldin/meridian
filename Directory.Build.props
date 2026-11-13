@@ -8,8 +8,9 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- CS1591: missing XML doc on public members. Public API docs are encouraged, not enforced. -->
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- CS1591: missing XML doc on public members; CS1573: param tags on only some parameters.
+         Docs are encouraged where they add something, not enforced on every member. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     <InvariantGlobalization>true</InvariantGlobalization>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
