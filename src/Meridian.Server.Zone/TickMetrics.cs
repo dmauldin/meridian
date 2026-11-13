@@ -12,11 +12,21 @@ public sealed record TickReport(
     double WorkMaxMs,
     int Overruns,
     int Players,
-    long BytesOut)
+    long BytesOut,
+    IReadOnlyList<int> WorkMicros)
 {
     public string ToLogLine() => string.Create(
         CultureInfo.InvariantCulture,
         $"METRICS players={Players} hz={AchievedHz:F2} work_p50_ms={WorkP50Ms:F3} work_p99_ms={WorkP99Ms:F3} work_max_ms={WorkMaxMs:F3} overruns={Overruns} out_kbps={BytesOut / SecondsElapsed / 1024:F1}");
+
+    /// <summary>
+    /// Every tick's work time in the window, in whole microseconds, sorted ascending. Lets the gate
+    /// take percentiles over a whole run: a 5 s window has only 100 ticks, so its own p99 is
+    /// effectively its second-worst tick.
+    /// </summary>
+    public string ToSamplesLine() => string.Create(
+        CultureInfo.InvariantCulture,
+        $"TICKS players={Players} work_us={string.Join(',', WorkMicros)}");
 }
 
 /// <summary>Collects per-tick work time and produces percentile reports.</summary>
@@ -53,7 +63,8 @@ public sealed class TickMetrics
             _work.Count > 0 ? _work[^1] : 0,
             _overruns,
             players,
-            _bytesOut);
+            _bytesOut,
+            [.. _work.Select(ms => (int)Math.Round(ms * 1000))]);
         _work.Clear();
         _overruns = 0;
         _bytesOut = 0;

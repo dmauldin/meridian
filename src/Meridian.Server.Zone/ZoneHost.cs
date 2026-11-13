@@ -111,6 +111,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
             {
                 LastReport = metrics.Report(end, Simulation.PlayerCount);
                 _log(LastReport.ToLogLine());
+                _log(LastReport.ToSamplesLine());
                 nextReport = end + metricsTicks;
             }
         }
