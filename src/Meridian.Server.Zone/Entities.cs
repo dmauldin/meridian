@@ -1,5 +1,6 @@
 using Meridian.Core.Characters;
 using Meridian.Core.Combat;
+using Meridian.Core.Content;
 using Meridian.Core.Stats;
 using Meridian.Core.World;
 
@@ -74,8 +75,8 @@ public abstract class Entity
 /// <summary>A connected player's simulation state.</summary>
 public sealed class Player : Entity
 {
-    public Player(uint entityId, ClientRef client, ulong accountId, string name, Character character)
-        : base(entityId, EntityKind.Player, name, character, StarterContent.IssueRifle)
+    public Player(uint entityId, ClientRef client, ulong accountId, string name, Character character, WeaponProfile weapon)
+        : base(entityId, EntityKind.Player, name, character, weapon)
     {
         Client = client;
         AccountId = accountId;
@@ -113,7 +114,7 @@ public enum MobState : byte
 /// <summary>A spawned creature and its AI state.</summary>
 public sealed class Mob : Entity
 {
-    public Mob(uint entityId, MobTemplate template, Position spawn, Character character)
+    public Mob(uint entityId, MobDef template, Position spawn, Character character)
         : base(entityId, EntityKind.Mob, template.Name, character, template.Attack)
     {
         Template = template;
@@ -122,7 +123,7 @@ public sealed class Mob : Entity
         WanderTarget = spawn;
     }
 
-    public MobTemplate Template { get; }
+    public MobDef Template { get; }
 
     public Position Spawn { get; }
 

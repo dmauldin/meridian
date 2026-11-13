@@ -1,0 +1,58 @@
+# Buff Protocols. requirements are the caster's skills; effects apply to the target.
+- id: 5001
+  key: buff.rifle_enhancement_1
+  name: Rifle Enhancement I
+  line: rifle_enhancement
+  strength: 1
+  lattice_cost: 4
+  energy_cost: 10
+  duration_s: 600
+  target: any_player
+  professions: [Operative, Trooper]
+  requirements: { KineticFlux: 20 }
+  effects:
+    - { stat: Rifle, flat: 15 }
+
+- id: 5002
+  key: buff.rifle_enhancement_2
+  name: Rifle Enhancement II
+  line: rifle_enhancement
+  strength: 2
+  lattice_cost: 8
+  energy_cost: 25
+  duration_s: 600
+  target: any_player
+  professions: [Operative, Trooper]
+  requirements: { KineticFlux: 120 }
+  effects:
+    - { stat: Rifle, flat: 40 }
+    - { stat: AimedShot, flat: 10 }
+
+- id: 5101
+  key: buff.reflex_boost_1
+  name: Reflex Boost I
+  line: reflex_boost
+  strength: 1
+  lattice_cost: 5
+  energy_cost: 15
+  duration_s: 600
+  target: any_player
+  professions: [Medic]
+  requirements: { BioWeaving: 25 }
+  effects:
+    - { stat: Agility, flat: 20 }
+    - { stat: EvadeRanged, flat: 10 }
+
+- id: 5201
+  key: buff.intimidating_presence
+  name: Intimidating Presence
+  line: threat_presence
+  strength: 1
+  lattice_cost: 6
+  energy_cost: 20
+  duration_s: 900
+  target: self
+  professions: [Warden]
+  requirements: { MindCraft: 15 }
+  effects:
+    - { stat: ThreatModifier, flat: 5000 }

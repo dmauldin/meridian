@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0x0978359F93215620UL;
+    public const ulong Hash = 0x1EB228FEC2A3B1C7UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -225,6 +225,8 @@ public partial struct Welcome : IWireMessage<Welcome>
 
     public int Z;
 
+    public ulong ContentHash;
+
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteU32(EntityId);
@@ -233,6 +235,7 @@ public partial struct Welcome : IWireMessage<Welcome>
         writer.WriteU16(TickRateHz);
         writer.WriteI32(X);
         writer.WriteI32(Z);
+        writer.WriteU64(ContentHash);
     }
 
     public static Welcome Read(ref WireReader reader)
@@ -244,6 +247,7 @@ public partial struct Welcome : IWireMessage<Welcome>
         value.TickRateHz = reader.ReadU16();
         value.X = reader.ReadI32();
         value.Z = reader.ReadI32();
+        value.ContentHash = reader.ReadU64();
         return value;
     }
 }

@@ -1,0 +1,27 @@
+- id: 1
+  key: mob.glasswind_skitter
+  name: Glasswind Skitter
+  level: 3
+  stats:
+    BodyDevelopment: 30
+    Stamina: 30
+    Unarmed: 40
+    MeleeInit: 0
+    EvadeRanged: 20
+    EvadeClose: 20
+    ProjectileAC: 15
+    MeleeAC: 15
+  attack:
+    name: Glass Mandibles
+    attack_skill: Unarmed
+    initiative: MeleeInit
+    defence: EvadeClose
+    damage_type: Melee
+    attack_time_ms: 2000
+    range_m: 3
+    min_damage: 5
+    max_damage: 12
+  aggro_m: 8
+  leash_m: 40
+  speed_m_s: 4
+  respawn_s: 10

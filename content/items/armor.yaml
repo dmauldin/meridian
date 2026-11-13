@@ -1,0 +1,21 @@
+# Armor and implants. Effects scale with QL like requirements do.
+- id: 2001
+  key: armor.marksman_gloves
+  name: Marksman Gloves
+  slot: Hands
+  ql: [1, 300]
+  requirements:
+    Agility: { 1: 20, 300: 520 }
+  effects:
+    - { stat: Rifle, flat: { 1: 5, 300: 80 } }
+    - { stat: ProjectileAC, flat: { 1: 4, 300: 240 } }
+
+- id: 3001
+  key: implant.ocular_reflex
+  name: Ocular Reflex Implant
+  slot: ImplantEye
+  ql: [1, 300]
+  requirements:
+    Agility: { 1: 10, 300: 400 }
+  effects:
+    - { stat: Agility, flat: { 1: 3, 300: 60 } }

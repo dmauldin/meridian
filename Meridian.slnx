@@ -7,6 +7,8 @@
   <Folder Name="/src/">
     <Project Path="src/Meridian.Bots/Meridian.Bots.csproj" />
     <Project Path="src/Meridian.ClientState/Meridian.ClientState.csproj" />
+    <Project Path="src/Meridian.Content/Meridian.Content.csproj" />
+    <Project Path="src/Meridian.ContentCompiler/Meridian.ContentCompiler.csproj" />
     <Project Path="src/Meridian.Core/Meridian.Core.csproj" />
     <Project Path="src/Meridian.Net/Meridian.Net.csproj" />
     <Project Path="src/Meridian.Wire.Gen/Meridian.Wire.Gen.csproj" />
@@ -17,6 +19,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Meridian.ClientState.Tests/Meridian.ClientState.Tests.csproj" />
+    <Project Path="tests/Meridian.Content.Tests/Meridian.Content.Tests.csproj" />
     <Project Path="tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj" />
     <Project Path="tests/Meridian.Net.Tests/Meridian.Net.Tests.csproj" />
     <Project Path="tests/Meridian.Server.Tests/Meridian.Server.Tests.csproj" />

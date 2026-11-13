@@ -1,0 +1,36 @@
+# Weapons. A weapon is an item with a `weapon` block.
+- id: 1001
+  key: rifle.combine_carbine
+  name: Combine Issue Carbine
+  slot: TwoHand
+  ql: [1, 300]
+  requirements:
+    Rifle: { 1: 4, 300: 1150 }
+  weapon:
+    attack_skill: Rifle
+    initiative: RangedInit
+    defence: EvadeRanged
+    damage_type: Projectile
+    attack_time_ms: 1500
+    range_m: 25
+    min_damage: { 1: 8, 300: 180 }
+    max_damage: { 1: 20, 300: 520 }
+
+- id: 1002
+  key: rifle.kestrel_mk2
+  name: Kestrel Mk2
+  slot: TwoHand
+  ql: [1, 300]
+  professions: [Operative, Trooper]
+  requirements:
+    Rifle: { 1: 40, 300: 1300 }
+    Agility: { 1: 30, 300: 600 }
+  weapon:
+    attack_skill: Rifle
+    initiative: RangedInit
+    defence: EvadeRanged
+    damage_type: Projectile
+    attack_time_ms: 1400
+    range_m: 32
+    min_damage: { 1: 14, 300: 260 }
+    max_damage: { 1: 30, 300: 700 }

@@ -85,8 +85,17 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
         return candidates[(i + 1) % candidates.Count];
     }
 
+    /// <summary>The content this client was built with; must match the server's.</summary>
+    public ulong ContentHash { get; init; } = Meridian.Content.ContentPacks.Embedded.Hash;
+
     public void OnWelcome(GameConnection context, in Welcome message)
     {
+        if (message.ContentHash != ContentHash)
+        {
+            // Different item stats, Protocols or zones would make every tooltip and prediction lie.
+            context?.Abort($"Game data does not match the server (client {ContentHash:X16}, server {message.ContentHash:X16}). Please update.");
+            return;
+        }
         SelfId = message.EntityId;
         TickMs = 1_000 / Math.Max(1, (int)message.TickRateHz);
         _serverOffsetMs = (message.ServerTick * (double)TickMs) - NowMs;

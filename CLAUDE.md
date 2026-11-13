@@ -16,6 +16,10 @@ The owner is a senior engineer who reviews every change. Optimise for reviewabil
 - Edit `src/Meridian.Wire/Schema/messages.wire`, then run
   `dotnet run --project src/Meridian.Wire.Gen`. Never hand-edit `Generated/Messages.g.cs`;
   a test fails if it is stale.
+- Game data lives in `content/*.yaml`. After editing it, run
+  `dotnet run --project src/Meridian.ContentCompiler` and commit `content/meridian.pack.json`;
+  a test fails if it is stale. Content ids are append-only like wire ids. Never put tuning
+  numbers for items, Protocols or mobs in C#.
 - Everything from a client is hostile: bound every length, reject trailing bytes, never
   trust results, only intents.
 - Tuning numbers live in `StatCatalog.Default` and `Formulas`; changing one must change a

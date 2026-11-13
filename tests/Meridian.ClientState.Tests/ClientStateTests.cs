@@ -148,7 +148,7 @@ public class ClientWorldTests
     private static ClientWorld Joined()
     {
         var w = new ClientWorld { NowMs = 1_000 };
-        w.OnWelcome(null!, new Welcome { EntityId = 1, TickRateHz = 20, ServerTick = 100, X = 0, Z = 0 });
+        w.OnWelcome(null!, new Welcome { EntityId = 1, TickRateHz = 20, ServerTick = 100, X = 0, Z = 0, ContentHash = w.ContentHash });
         return w;
     }
 
@@ -162,6 +162,14 @@ public class ClientWorldTests
 
     private static EntityState State(uint id, int x, byte flags = 0) =>
         new() { EntityId = id, X = x, Z = 0, HealthPercent = 100, Flags = flags };
+
+    [Fact]
+    public void A_server_with_different_content_is_refused()
+    {
+        var w = new ClientWorld { NowMs = 0, ContentHash = 0xAAAA };
+        w.OnWelcome(null!, new Welcome { EntityId = 1, TickRateHz = 20, ContentHash = 0xBBBB });
+        Assert.False(w.InWorld);
+    }
 
     [Fact]
     public void Welcome_places_the_player_and_starts_the_server_clock()

@@ -60,6 +60,7 @@ end
 
 # ---------------------------------------------------------------- server → client
 
+# contentHash identifies the server's content pack; a client with different data must not play.
 message 200 Welcome client_bound reliable_ordered
   u32 entityId
   u32 zoneId
@@ -67,6 +68,7 @@ message 200 Welcome client_bound reliable_ordered
   u16 tickRateHz
   i32 x
   i32 z
+  u64 contentHash
 end
 
 # flags: bit 0 = dead, bit 1 = in combat.

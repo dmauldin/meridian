@@ -1,0 +1,9 @@
+id: 1
+key: glasswind_flats
+name: Glasswind Flats
+bounds_m: { min_x: -2000, min_z: -2000, max_x: 2000, max_z: 2000 }
+spawns:
+  - mob: mob.glasswind_skitter
+    count: 40
+    center_m: { x: 0, z: 0 }
+    ring_m: { inner: 40, outer: 120 }

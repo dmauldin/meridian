@@ -1,5 +1,6 @@
 using Meridian.Core.Characters;
 using Meridian.Core.Combat;
+using Meridian.Core.Content;
 using Meridian.Core.Randomness;
 using Meridian.Core.Stats;
 using Meridian.Core.World;
@@ -17,29 +18,37 @@ public sealed partial class ZoneSimulation
 
     private void SpawnMobs()
     {
+        IEnumerable<SpawnGroup> groups = _zone.Spawns;
+        if (_options.MobCount is { } count)
+        {
+            groups = _zone.Spawns.Take(1).Select(g => g with { Count = count });
+        }
+
         // A separate stream for layout, so adding a mob never shifts combat rolls. Integer
         // rejection sampling (not sin/cos) keeps placement bit-identical on every platform.
         var layout = new DeterministicRandom(_options.Seed ^ 0x5350415745UL);
-        long inner2 = (long)_options.MobRingInnerMm * _options.MobRingInnerMm;
-        long outer2 = (long)_options.MobRingOuterMm * _options.MobRingOuterMm;
-        var origin = new Position(0, 0);
-        for (var i = 0; i < _options.MobCount; i++)
+        foreach (var group in groups)
         {
-            Position spawn;
-            do
+            var mobDef = _content.Mobs[group.MobKey];
+            long inner2 = (long)group.InnerRadiusMm * group.InnerRadiusMm;
+            long outer2 = (long)group.OuterRadiusMm * group.OuterRadiusMm;
+            for (var i = 0; i < group.Count; i++)
             {
-                spawn = new Position(
-                    layout.NextInt(-_options.MobRingOuterMm, _options.MobRingOuterMm),
-                    layout.NextInt(-_options.MobRingOuterMm, _options.MobRingOuterMm));
-            }
-            while (spawn.DistanceSquared(origin) < inner2 || spawn.DistanceSquared(origin) > outer2);
+                Position spawn;
+                do
+                {
+                    spawn = new Position(
+                        group.Center.X + layout.NextInt(-group.OuterRadiusMm, group.OuterRadiusMm),
+                        group.Center.Z + layout.NextInt(-group.OuterRadiusMm, group.OuterRadiusMm));
+                }
+                while (spawn.DistanceSquared(group.Center) < inner2 || spawn.DistanceSquared(group.Center) > outer2);
 
-            var template = StarterContent.GlasswindSkitter;
-            var character = new Character(Profession.Warden, Origin.Baseline);
-            template.ApplyStats(character.Stats);
-            var mob = new Mob(_nextEntityId++, template, _options.Bounds.Clamp(spawn), character);
-            _mobs.Add(mob);
-            Add(mob);
+                var character = new Character(Profession.Warden, Origin.Baseline);
+                mobDef.ApplyStats(character.Stats);
+                var mob = new Mob(_nextEntityId++, mobDef, _zone.Bounds.Clamp(spawn), character);
+                _mobs.Add(mob);
+                Add(mob);
+            }
         }
     }
 
@@ -285,7 +294,7 @@ public sealed partial class ZoneSimulation
                 mob.State = MobState.Dead;
                 mob.Threat.Clear();
                 mob.TargetId = 0;
-                mob.RespawnAtTick = Tick + (uint)mob.Template.RespawnTicks;
+                mob.RespawnAtTick = Tick + (uint)Math.Max(1, mob.Template.RespawnMs / _options.TickMs);
                 break;
             case Player player:
                 player.RespawnAtTick = Tick + (uint)_options.PlayerRespawnTicks;

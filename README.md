@@ -7,7 +7,7 @@ names and systems are original.
 - Design: [Game Design Document](https://claude.ai/artifact/8FGVNSTFDMqDiQZ9AN5WzB)
 - Architecture: [Technical Architecture & Roadmap](https://claude.ai/artifact/6owmrpxx4VkgdvmS3wDvvQ)
 
-## Status: M0 and M1 complete
+## Status: M0 and M1 complete; M2 (build loop) in progress
 
 | Gate | Result |
 | --- | --- |
@@ -33,9 +33,11 @@ src/
   Meridian.Server.Auth/     HTTP login -> session key + sealed single-use ticket.
   Meridian.Server.Gateway/  Client-facing UDP edge: tickets, decryption, schema check,
                             rate limiting, relay to the zone.
+  Meridian.Content/         The compiled content pack (embedded) and its JSON mapping.
+  Meridian.ContentCompiler/ YAML in content/ -> validated meridian.pack.json.
   Meridian.Server.Zone/     Authoritative 20 Hz simulation (ZoneSimulation), mob AI and
                             auto-attack combat (ZoneSimulation.Combat), and its host.
-                            StarterContent holds the hand-written M1 mob and weapon.
+content/                    Game data as YAML: items, Protocols, mobs, zones. See content/README.md.
   Meridian.ClientState/     The client's world model, engine-free: interpolation, prediction
                             and reconciliation, input pacing, events. Unit-tested.
   Meridian.Bots/            Headless load-test clients.
@@ -57,6 +59,7 @@ deploy/                     Dockerfile and docker-compose for the server stack.
 dotnet build                                   # warnings are errors
 dotnet test                                    # all tests
 dotnet run --project src/Meridian.Wire.Gen     # after editing Schema/messages.wire
+dotnet run --project src/Meridian.ContentCompiler   # after editing anything in content/
 scripts/m0-gate.sh 100 60                      # load test: bots, seconds
 scripts/m0-gate.sh 100 60 hunt                 # same, with bots fighting mobs
 ```

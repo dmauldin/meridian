@@ -1,0 +1,13 @@
+# Starting state until character creation and professions arrive (M2.2).
+stats:
+  Level: 1
+  RunSpeed: 5000   # mm/s
+  BodyDevelopment: 10
+  Stamina: 20
+  Rifle: 30
+  RangedInit: 10
+  EvadeRanged: 20
+  EvadeClose: 20
+  ProjectileAC: 10
+  MeleeAC: 10
+starting_weapon: { item: rifle.combine_carbine, ql: 1 }
