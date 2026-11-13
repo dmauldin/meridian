@@ -53,6 +53,11 @@ message 104 SetAttack server_bound reliable_ordered
   bool enabled
 end
 
+# The newest DeltaSnapshot the client has fully rebuilt; the server deltas against it.
+message 105 SnapshotAck server_bound unreliable_sequenced
+  u32 tick
+end
+
 # ---------------------------------------------------------------- server → client
 
 message 200 Welcome client_bound reliable_ordered
@@ -74,12 +79,7 @@ struct EntityState
   u8 flags
 end
 
-message 201 Snapshot client_bound unreliable_sequenced
-  u32 tick
-  u32 ackedInputSequence
-  list<EntityState>(64) entities
-  list<varu32>(64) removed
-end
+# Id 201 (full-state Snapshot) is retired; see DeltaSnapshot (210). Never reuse 201.
 
 message 202 ChatMessage client_bound reliable_unordered
   u32 fromEntityId
@@ -134,6 +134,18 @@ end
 message 209 Respawned client_bound reliable_ordered
   i32 x
   i32 z
+end
+
+# Entity state relative to an acknowledged baseline snapshot (0 = no baseline: full state).
+# entities: a packed EntityDeltaCodec stream (hand-written, see Meridian.Wire/Delta), holding
+# only entities that changed since the baseline. Visible entities absent from it are unchanged.
+# removed: in the baseline but no longer visible.
+message 210 DeltaSnapshot client_bound unreliable_sequenced
+  u32 tick
+  u32 baselineTick
+  u32 ackedInputSequence
+  bytes(1300) entities
+  list<varu32>(128) removed
 end
 
 # ---------------------------------------------------------------- gateway ↔ zone

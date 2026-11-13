@@ -147,8 +147,8 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             _log($"zone sent unknown delivery mode {message.DeliveryMode}");
             return;
         }
-        var length = session.Cipher.Seal(message.Payload, _sealed);
         var (channel, method) = NetDefaults.Map((Delivery)message.DeliveryMode);
+        var length = session.Cipher.Seal(channel, message.Payload, _sealed);
         session.Peer.Send(_sealed, 0, length, channel, method);
         _packetsOut++;
     }
@@ -234,7 +234,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             return;
         }
 
-        var length = session.Cipher.Open(data, _plain);
+        var length = session.Cipher.Open(channel, data, _plain);
         if (length < 0)
         {
             _dropped++;
@@ -282,7 +282,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
     private void Kick(ClientSession session, string reason)
     {
         var bye = Envelope.Encode(_plain, new Disconnecting { Reason = reason });
-        var length = session.Cipher.Seal(bye, _sealed);
+        var length = session.Cipher.Seal(SessionCipher.DisconnectStream, bye, _sealed);
         session.Peer.Disconnect(_sealed.AsSpan(0, length));
     }
 
@@ -322,6 +322,10 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
 
         public void OnSetAttack(int context, in SetAttack message)
+        {
+        }
+
+        public void OnSnapshotAck(int context, in SnapshotAck message)
         {
         }
     }

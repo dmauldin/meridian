@@ -78,8 +78,8 @@ public sealed class GameConnection : IDisposable
             return;
         }
         var plain = Envelope.Encode(_plain, message);
-        var length = _cipher.Seal(plain, _sealed);
         var (channel, method) = NetDefaults.Map(T.Delivery);
+        var length = _cipher.Seal(channel, plain, _sealed);
         _peer.Send(_sealed, 0, length, channel, method);
     }
 
@@ -110,7 +110,7 @@ public sealed class GameConnection : IDisposable
         {
             return System.Text.Encoding.UTF8.GetString(data);
         }
-        var length = _cipher?.Open(data, _plain) ?? -1;
+        var length = _cipher?.Open(SessionCipher.DisconnectStream, data, _plain) ?? -1;
         if (length > 0)
         {
             try
@@ -129,7 +129,7 @@ public sealed class GameConnection : IDisposable
         var data = reader.GetRemainingBytesSpan();
         PacketsReceived++;
         BytesReceived += data.Length;
-        var length = _cipher!.Open(data, _plain);
+        var length = _cipher!.Open(channel, data, _plain);
         if (length < 0)
         {
             return; // forged or replayed; counted in the cipher

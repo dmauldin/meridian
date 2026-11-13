@@ -93,6 +93,9 @@ public sealed class Player : Entity
 
     internal HashSet<uint> LastVisible { get; } = [];
 
+    /// <summary>What recent snapshots sent, and which one the client acknowledged.</summary>
+    internal Meridian.Wire.Delta.SnapshotHistory History { get; } = new();
+
     internal SelfStatusKey? LastSentStatus { get; set; }
 }
 

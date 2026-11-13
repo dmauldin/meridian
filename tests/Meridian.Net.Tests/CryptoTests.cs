@@ -12,14 +12,14 @@ public class SessionCipherTests
     private static byte[] Seal(SessionCipher c, byte[] plain)
     {
         var buf = new byte[plain.Length + SessionCipher.Overhead];
-        Assert.Equal(buf.Length, c.Seal(plain, buf));
+        Assert.Equal(buf.Length, c.Seal(0, plain, buf));
         return buf;
     }
 
     private static byte[]? Open(SessionCipher c, byte[] sealedPacket)
     {
         var buf = new byte[sealedPacket.Length];
-        var n = c.Open(sealedPacket, buf);
+        var n = c.Open(0, sealedPacket, buf);
         return n < 0 ? null : buf[..n];
     }
 
@@ -79,11 +79,54 @@ public class SessionCipherTests
     {
         var (client, server) = Pair();
         var old = Seal(client, [0]);
-        for (var i = 0; i < 64; i++)
+        for (var i = 0; i < ReplayWindow.Width; i++)
         {
             Open(server, Seal(client, [1]));
         }
         Assert.Null(Open(server, old));
+    }
+
+    [Fact]
+    public void Reordering_within_the_window_is_accepted()
+    {
+        var (client, server) = Pair();
+        var late = Seal(client, [7]);
+        for (var i = 0; i < ReplayWindow.Width - 1; i++)
+        {
+            Open(server, Seal(client, [1]));
+        }
+        Assert.NotNull(Open(server, late));
+    }
+
+    /// <summary>
+    /// The bug load testing found: a reliable packet lost and resent after many unreliable ones
+    /// was rejected as a replay. Streams have separate counters and windows, so it now opens.
+    /// </summary>
+    [Fact]
+    public void A_late_reliable_resend_survives_heavy_traffic_on_another_stream()
+    {
+        var (client, server) = Pair();
+        var reliable = new byte[64];
+        var n = server.Seal(1, [42], reliable);
+        var buf = new byte[64];
+        for (var i = 0; i < 5_000; i++)
+        {
+            var snap = new byte[64];
+            var m = server.Seal(0, [1], snap);
+            Assert.True(client.Open(0, snap.AsSpan(0, m), buf) >= 0);
+        }
+        Assert.Equal(1, client.Open(1, reliable.AsSpan(0, n), buf));
+    }
+
+    [Fact]
+    public void A_packet_moved_to_another_stream_is_rejected()
+    {
+        var (client, server) = Pair();
+        var p = new byte[64];
+        var n = client.Seal(1, [9], p);
+        var buf = new byte[64];
+        Assert.Equal(-1, server.Open(0, p.AsSpan(0, n), buf));
+        Assert.Equal(1, server.Open(1, p.AsSpan(0, n), buf));
     }
 
     [Fact]
@@ -115,19 +158,41 @@ public class SessionCipherTests
 public class ReplayWindowTests
 {
     [Fact]
+    public void Matches_a_reference_set_under_random_traffic()
+    {
+        // Compare against an exact (unbounded) model: accept iff unseen and within Width of the max.
+        var rng = new Random(5);
+        var w = new ReplayWindow();
+        var seen = new HashSet<ulong>();
+        ulong highest = 0;
+        for (var i = 0; i < 200_000; i++)
+        {
+            var c = (ulong)Math.Max(1, (long)highest + rng.Next(-1_200, 40));
+            var expected = c > highest || (highest - c < ReplayWindow.Width && !seen.Contains(c));
+            Assert.Equal(expected, w.CanAccept(c));
+            if (expected)
+            {
+                w.Accept(c);
+                seen.Add(c);
+                highest = Math.Max(highest, c);
+            }
+        }
+    }
+
+    [Fact]
     public void Counter_zero_is_never_valid()
     {
-        Assert.False(default(ReplayWindow).CanAccept(0));
+        Assert.False(new ReplayWindow().CanAccept(0));
     }
 
     [Fact]
     public void Large_jump_clears_history()
     {
-        var w = default(ReplayWindow);
+        var w = new ReplayWindow();
         w.Accept(1);
-        w.Accept(1_000);
-        Assert.False(w.CanAccept(1_000));
-        Assert.True(w.CanAccept(999));
+        w.Accept(5_000);
+        Assert.False(w.CanAccept(5_000));
+        Assert.True(w.CanAccept(4_999));
         Assert.False(w.CanAccept(1)); // too old
     }
 }

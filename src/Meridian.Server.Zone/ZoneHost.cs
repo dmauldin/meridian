@@ -122,15 +122,22 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         {
             return;
         }
-        var envelope = new ToClient
-        {
-            ConnectionId = client.ConnectionId,
-            DeliveryMode = (byte)delivery,
-            Payload = packet.ToArray(),
-        };
-        var bytes = Envelope.Encode(_buffer, envelope);
+        // Written by hand to avoid copying the payload into a ToClient.Payload array; a test
+        // checks the bytes match the generated encoding exactly.
+        var bytes = WriteToClient(_buffer, client.ConnectionId, delivery, packet);
         gateway.Send(bytes, 1, DeliveryMethod.ReliableOrdered);
         _metrics?.RecordBytesOut(packet.Length);
+    }
+
+    /// <summary>Encodes a <see cref="ToClient"/> envelope around <paramref name="payload"/> without copying it first.</summary>
+    public static ReadOnlySpan<byte> WriteToClient(Span<byte> buffer, uint connectionId, Delivery delivery, ReadOnlySpan<byte> payload)
+    {
+        var w = new WireWriter(buffer);
+        w.WriteU16(ToClient.Id);
+        w.WriteU32(connectionId);
+        w.WriteU8((byte)delivery);
+        w.WriteBytes(payload, 16_000);
+        return buffer[..w.Position];
     }
 
     public void OnPlayerJoin(NetPeer context, in PlayerJoin message)

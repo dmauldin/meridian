@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Meridian.Core.World;
 using Meridian.Net.Client;
 using Meridian.Wire;
+using Meridian.Wire.Delta;
 
 namespace Meridian.Bots;
 
@@ -18,6 +19,11 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     private readonly bool _hunt;
     private readonly long _startTimestamp = Stopwatch.GetTimestamp();
     private readonly Dictionary<uint, Known> _world = [];
+    private readonly SnapshotAssembler _assembler = new();
+
+    // Kinds live apart from positions: EntityInfo can arrive before the entity's first snapshot,
+    // and the "not in this snapshot" sweep below must not erase it.
+    private readonly Dictionary<uint, byte> _kinds = [];
     private long _nextMove, _nextTurn, _nextPing, _nextChat, _nextThink;
     private short _dirX, _dirZ;
     private uint _sequence;
@@ -154,25 +160,32 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
         Welcomed = true;
     }
 
-    public void OnSnapshot(GameConnection context, in Snapshot message)
+    public void OnDeltaSnapshot(GameConnection context, in DeltaSnapshot message)
     {
+        if (!_assembler.TryApply(message, out var entities))
+        {
+            return;
+        }
+        context.Send(new SnapshotAck { Tick = message.Tick });
         if (Snapshots == 0)
         {
             FirstSnapshotTimestamp = Stopwatch.GetTimestamp();
         }
         Snapshots++;
-        MaxEntitiesSeen = Math.Max(MaxEntitiesSeen, message.Entities?.Length ?? 0);
-        foreach (var e in message.Entities ?? [])
+        MaxEntitiesSeen = Math.Max(MaxEntitiesSeen, entities.Count);
+
+        var visible = new HashSet<uint>();
+        foreach (var e in entities)
         {
+            visible.Add(e.EntityId);
             var pos = new Position(e.X, e.Z);
             if (e.EntityId == EntityId)
             {
                 _position = pos;
             }
-            var kind = _world.TryGetValue(e.EntityId, out var k) ? k.Kind : (byte)0;
-            _world[e.EntityId] = new Known(kind, pos, (e.Flags & 1) != 0);
+            _world[e.EntityId] = new Known(_kinds.GetValueOrDefault(e.EntityId), pos, (e.Flags & 1) != 0);
         }
-        foreach (var id in message.Removed ?? [])
+        foreach (var id in _world.Keys.Where(id => !visible.Contains(id)).ToList())
         {
             _world.Remove(id);
         }
@@ -180,8 +193,11 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
 
     public void OnEntityInfo(GameConnection context, in EntityInfo message)
     {
-        var known = _world.GetValueOrDefault(message.EntityId);
-        _world[message.EntityId] = known with { Kind = message.Kind };
+        _kinds[message.EntityId] = message.Kind;
+        if (_world.TryGetValue(message.EntityId, out var known))
+        {
+            _world[message.EntityId] = known with { Kind = message.Kind };
+        }
     }
 
     public void OnCombatEvent(GameConnection context, in CombatEvent message)

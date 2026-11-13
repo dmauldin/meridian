@@ -65,24 +65,22 @@ public class GeneratedCodeTests
 public class RoundTripTests
 {
     [Fact]
-    public void Snapshot_round_trips_with_nested_lists()
+    public void DeltaSnapshot_round_trips_bytes_and_lists()
     {
-        var original = new Snapshot
+        var original = new DeltaSnapshot
         {
             Tick = 123_456,
+            BaselineTick = 123_450,
             AckedInputSequence = 99,
-            Entities =
-            [
-                new EntityState { EntityId = 1, X = -5_000, Z = 4_000_000, Yaw = 200, HealthPercent = 100 },
-                new EntityState { EntityId = 70_000, X = int.MinValue, Z = int.MaxValue, Yaw = 0, HealthPercent = 3 },
-            ],
+            Entities = [1, 2, 3, 250],
             Removed = [5, 300_000],
         };
 
         var bytes = Envelope.ToArray(original);
-        var copy = Envelope.Decode<Snapshot>(bytes);
+        var copy = Envelope.Decode<DeltaSnapshot>(bytes);
 
         Assert.Equal(original.Tick, copy.Tick);
+        Assert.Equal(original.BaselineTick, copy.BaselineTick);
         Assert.Equal(original.Entities, copy.Entities);
         Assert.Equal(original.Removed, copy.Removed);
         Assert.Equal(bytes, Envelope.ToArray(copy));
@@ -91,8 +89,9 @@ public class RoundTripTests
     [Fact]
     public void Null_lists_and_strings_encode_as_empty()
     {
-        var copy = Envelope.Decode<Snapshot>(Envelope.ToArray(new Snapshot { Tick = 1 }));
+        var copy = Envelope.Decode<DeltaSnapshot>(Envelope.ToArray(new DeltaSnapshot { Tick = 1 }));
         Assert.Empty(copy.Entities!);
+        Assert.Empty(copy.Removed!);
         var chat = Envelope.Decode<ChatMessage>(Envelope.ToArray(new ChatMessage()));
         Assert.Equal(string.Empty, chat.Text);
     }
@@ -103,15 +102,6 @@ public class RoundTripTests
         var copy = Envelope.Decode<ChatMessage>(Envelope.ToArray(new ChatMessage { FromName = "Ýrsa", Text = "twilight ☀︎/☾ band" }));
         Assert.Equal("Ýrsa", copy.FromName);
         Assert.Equal("twilight ☀︎/☾ band", copy.Text);
-    }
-
-    [Fact]
-    public void Entity_state_is_compact()
-    {
-        // A small entity id costs one byte; the rest is fixed. Keeps 64 entities well under the MTU.
-        var bytes = Envelope.ToArray(new Snapshot { Entities = [new EntityState { EntityId = 5 }] });
-        const int header = 2 + 4 + 4 + 1 + 1; // id, tick, ack, count, removed count
-        Assert.Equal(header + 1 + 4 + 4 + 1 + 1 + 1, bytes.Length); // id, x, z, yaw, health, flags
     }
 
     [Theory]
@@ -160,6 +150,8 @@ public class HostileInputTests
         public void OnSetTarget(int context, in SetTarget message) => Calls.Add($"target {message.EntityId}");
 
         public void OnSetAttack(int context, in SetAttack message) => Calls.Add($"attack {message.Enabled}");
+
+        public void OnSnapshotAck(int context, in SnapshotAck message) => Calls.Add($"ack {message.Tick}");
     }
 
     [Fact]
@@ -220,9 +212,9 @@ public class HostileInputTests
     [Fact]
     public void Huge_list_count_is_rejected_before_allocating()
     {
-        // Snapshot with entity count = uint.MaxValue and no data behind it.
-        byte[] bytes = [(byte)(Snapshot.Id & 0xFF), (byte)(Snapshot.Id >> 8), 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
-        var ex = Assert.Throws<WireFormatException>(() => Envelope.Decode<Snapshot>(bytes));
+        // DeltaSnapshot: tick, baseline, ack, empty entity bytes, then a removed count of uint.MaxValue.
+        byte[] bytes = [(byte)(DeltaSnapshot.Id & 0xFF), (byte)(DeltaSnapshot.Id >> 8), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
+        var ex = Assert.Throws<WireFormatException>(() => Envelope.Decode<DeltaSnapshot>(bytes));
         Assert.Contains("limit", ex.Message, StringComparison.Ordinal);
     }
 

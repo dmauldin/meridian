@@ -1,5 +1,6 @@
 using Meridian.Core.World;
 using Meridian.Wire;
+using Meridian.Wire.Delta;
 
 namespace Meridian.ClientState.Tests;
 
@@ -151,6 +152,14 @@ public class ClientWorldTests
         return w;
     }
 
+    /// <summary>Delivers a full-state snapshot (no baseline), the way the server sends before any ack.</summary>
+    private static void Snap(ClientWorld w, uint tick, params EntityState[] entities)
+    {
+        var buffer = new byte[2_000];
+        var length = EntityDeltaCodec.Encode(entities, null, buffer);
+        w.OnDeltaSnapshot(null!, new DeltaSnapshot { Tick = tick, Entities = buffer[..length] });
+    }
+
     private static EntityState State(uint id, int x, byte flags = 0) =>
         new() { EntityId = id, X = x, Z = 0, HealthPercent = 100, Flags = flags };
 
@@ -168,12 +177,12 @@ public class ClientWorldTests
     {
         var w = Joined();
         w.OnEntityInfo(null!, new EntityInfo { EntityId = 9, Kind = 2, Name = "Glasswind Skitter", Level = 3 });
-        w.OnSnapshot(null!, new Snapshot { Tick = 101, Entities = [State(1, 0), State(9, 5_000)] });
+        Snap(w, 101, State(1, 0), State(9, 5_000));
         Assert.False(w.Entities.ContainsKey(1)); // self is not a remote entity
         Assert.Equal("Glasswind Skitter", w.NameOf(9));
         Assert.Equal("You", w.NameOf(1));
 
-        w.OnSnapshot(null!, new Snapshot { Tick = 102, Removed = [9] });
+        Snap(w, 102, State(1, 0)); // 9 is no longer in view
         Assert.Empty(w.Entities);
     }
 
@@ -187,11 +196,7 @@ public class ClientWorldTests
         }
         w.OnEntityInfo(null!, new EntityInfo { EntityId = 13, Kind = 1, Name = "player" });
         w.OnEntityInfo(null!, new EntityInfo { EntityId = 14, Kind = 2, Name = "corpse" });
-        w.OnSnapshot(null!, new Snapshot
-        {
-            Tick = 101,
-            Entities = [State(10, 30_000), State(11, 10_000), State(12, 20_000), State(13, 1_000), State(14, 500, flags: 1)],
-        });
+        Snap(w, 101, State(10, 30_000), State(11, 10_000), State(12, 20_000), State(13, 1_000), State(14, 500, flags: 1));
 
         Assert.Equal(11u, w.NextMobTarget(0));
         Assert.Equal(12u, w.NextMobTarget(11));
@@ -214,6 +219,26 @@ public class ClientWorldTests
     }
 
     [Fact]
+    public void Entity_info_that_arrives_before_the_first_snapshot_survives()
+    {
+        var w = Joined();
+        Snap(w, 101, State(1, 0));
+        w.OnEntityInfo(null!, new EntityInfo { EntityId = 9, Kind = 2, Name = "early" });
+        Snap(w, 102, State(1, 0)); // 9 not in view yet
+        Snap(w, 103, State(1, 0), State(9, 100));
+        Assert.Equal("early", w.NameOf(9));
+    }
+
+    [Fact]
+    public void Stale_snapshots_are_ignored()
+    {
+        var w = Joined();
+        Snap(w, 105, State(1, 0), State(9, 100));
+        Snap(w, 104, State(1, 0)); // older: dropped, so 9 stays
+        Assert.True(w.Entities.ContainsKey(9));
+    }
+
+    [Fact]
     public void Respawn_teleports_without_blending()
     {
         var w = Joined();
@@ -225,7 +250,7 @@ public class ClientWorldTests
     public void Self_snapshot_reconciles_prediction()
     {
         var w = Joined();
-        w.OnSnapshot(null!, new Snapshot { Tick = 101, Entities = [State(1, 1_000)] });
+        Snap(w, 101, State(1, 1_000));
         Assert.Equal(150, w.Self.Position.X);
     }
 

@@ -2,6 +2,7 @@ using Meridian.Core.Characters;
 using Meridian.Core.Randomness;
 using Meridian.Core.World;
 using Meridian.Wire;
+using Meridian.Wire.Delta;
 
 namespace Meridian.Server.Zone;
 
@@ -79,6 +80,12 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     private readonly List<int> _candidates = [];
     private readonly List<(long Distance, Entity Entity)> _visible = [];
     private readonly HashSet<uint> _visibleIds = [];
+    private readonly EntityState[] _stateBuffer = new EntityState[EntityDeltaCodec.MaxEntities];
+    private readonly byte[] _deltaBuffer = new byte[EntityDeltaCodec.MaxEntities * EntityDeltaCodec.MaxEntryBytes + 8];
+    private readonly List<uint> _removed = [];
+    /// <summary>Schema limit on DeltaSnapshot.removed.</summary>
+    private const int MaxRemovedPerSnapshot = 128;
+
     private uint _nextEntityId = 1;
     private uint _gridTick = uint.MaxValue;
 
@@ -229,6 +236,9 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         Broadcast(speaker.Position, _options.ChatRadiusMm, chat);
     }
 
+    public void OnSnapshotAck(ClientRef context, in SnapshotAck message) =>
+        _byClient[context].History.Acknowledge(message.Tick);
+
     public void OnPing(ClientRef context, in Ping message) =>
         Send(_byClient[context], new Pong { ClientTimeMs = message.ClientTimeMs, ServerTick = Tick });
 
@@ -311,7 +321,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         _visible.Sort(static (a, b) => a.Distance != b.Distance ? a.Distance.CompareTo(b.Distance) : a.Entity.EntityId.CompareTo(b.Entity.EntityId));
         var count = Math.Min(_visible.Count, _options.MaxEntitiesPerSnapshot);
 
-        var entities = new EntityState[count];
+        var entities = _stateBuffer.AsSpan(0, count);
         _visibleIds.Clear();
         for (var i = 0; i < count; i++)
         {
@@ -339,30 +349,39 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
                 Flags = (byte)((e.Dead ? 1 : 0) | (InCombat(e) ? 2 : 0)),
             };
         }
-
-        // Entities the viewer saw last time but no longer sees. Overflow waits for the next snapshot.
-        var removed = new List<uint>();
-        foreach (var id in viewer.LastVisible)
-        {
-            if (!_visibleIds.Contains(id))
-            {
-                if (removed.Count == _options.MaxEntitiesPerSnapshot)
-                {
-                    _visibleIds.Add(id); // keep it pending
-                    continue;
-                }
-                removed.Add(id);
-            }
-        }
         viewer.LastVisible.Clear();
         viewer.LastVisible.UnionWith(_visibleIds);
 
-        Send(viewer, new Snapshot
+        // Delta against the newest snapshot this client acknowledged; full state if none.
+        var baseline = viewer.History.Baseline(out var baselineTick);
+        _removed.Clear();
+        if (baseline is not null)
+        {
+            foreach (var id in baseline.Keys)
+            {
+                if (!_visibleIds.Contains(id))
+                {
+                    _removed.Add(id);
+                }
+            }
+            if (_removed.Count > MaxRemovedPerSnapshot)
+            {
+                // A huge view change (teleport): cheaper and simpler to resend everything.
+                baseline = null;
+                baselineTick = 0;
+                _removed.Clear();
+            }
+        }
+        var length = EntityDeltaCodec.Encode(entities, baseline, _deltaBuffer);
+        viewer.History.Record(Tick, entities);
+
+        Send(viewer, new DeltaSnapshot
         {
             Tick = Tick,
+            BaselineTick = baselineTick,
             AckedInputSequence = viewer.LastInputSequence,
-            Entities = entities,
-            Removed = [.. removed],
+            Entities = _deltaBuffer.AsSpan(0, length).ToArray(),
+            Removed = [.. _removed],
         });
     }
 
