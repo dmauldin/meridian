@@ -68,7 +68,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         {
             throw new InvalidOperationException($"Could not bind UDP port {_options.Port}.");
         }
-        _log($"zone {_options.Zone.ZoneId} listening on udp/{Port} at {_options.Zone.TickRateHz} Hz");
+        _log($"zone {Simulation.Zone.Key} (content {Simulation.Content.Hash:X16}) listening on udp/{Port} at {_options.Zone.TickRateHz} Hz");
     }
 
     /// <summary>Runs the fixed-rate loop until <paramref name="stop"/> is cancelled.</summary>

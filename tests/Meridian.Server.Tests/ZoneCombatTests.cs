@@ -148,7 +148,7 @@ public class ZoneCombatTests
         Send(sim, A, new SetAttack { Enabled = true });
         Assert.False(a.Attacking);
 
-        Steps(sim, mob.Template.RespawnTicks);
+        Steps(sim, mob.Template.RespawnMs / 50);
         Assert.False(mob.Dead);
         Assert.Equal(mob.MaxHealth, mob.Health);
         Assert.Equal(mob.Spawn, mob.Position);
@@ -288,14 +288,17 @@ public class ZoneCombatTests
     [Fact]
     public void Mob_layout_is_deterministic_and_inside_the_ring()
     {
-        var options = new ZoneOptions { MobCount = 40 };
-        var one = new ZoneSimulation(options, new RecordingOutbox()).Mobs.Select(m => m.Spawn).ToList();
+        var options = new ZoneOptions(); // the zone exactly as authored in content
+        var sim = new ZoneSimulation(options, new RecordingOutbox());
+        var one = sim.Mobs.Select(m => m.Spawn).ToList();
         var two = new ZoneSimulation(options, new RecordingOutbox()).Mobs.Select(m => m.Spawn).ToList();
         Assert.Equal(one, two);
+        var group = sim.Zone.Spawns[0];
+        Assert.Equal(group.Count, one.Count);
         Assert.All(one, p =>
         {
-            var d = Movement.Distance(p, new Position(0, 0));
-            Assert.InRange(d, options.MobRingInnerMm, options.MobRingOuterMm);
+            var d = Movement.Distance(p, group.Center);
+            Assert.InRange(d, group.InnerRadiusMm, group.OuterRadiusMm);
         });
     }
 

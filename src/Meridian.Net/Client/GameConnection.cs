@@ -83,6 +83,13 @@ public sealed class GameConnection : IDisposable
         _peer.Send(_sealed, 0, length, channel, method);
     }
 
+    /// <summary>Ends the session for a client-side reason (shown to the player as <see cref="DisconnectReason"/>).</summary>
+    public void Abort(string reason)
+    {
+        DisconnectReason ??= reason;
+        Disconnect();
+    }
+
     public void Disconnect()
     {
         _peer?.Disconnect();

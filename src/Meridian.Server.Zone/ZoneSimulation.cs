@@ -1,4 +1,7 @@
+using Meridian.Content;
 using Meridian.Core.Characters;
+using Meridian.Core.Combat;
+using Meridian.Core.Content;
 using Meridian.Core.Randomness;
 using Meridian.Core.World;
 using Meridian.Wire;
@@ -17,7 +20,8 @@ public interface IZoneOutbox
 
 public sealed record ZoneOptions
 {
-    public uint ZoneId { get; init; } = 1;
+    /// <summary>Which zone from the content pack this simulation runs.</summary>
+    public string ZoneKey { get; init; } = "glasswind_flats";
 
     /// <summary>Seeds combat rolls and mob placement. Same seed + same inputs = same outcome.</summary>
     public ulong Seed { get; init; } = 0x4D45524944494E;
@@ -27,7 +31,6 @@ public sealed record ZoneOptions
     /// <summary>Send a snapshot every N ticks (2 at 20 Hz = 10 snapshots per second).</summary>
     public int SnapshotEveryTicks { get; init; } = 2;
 
-    public ZoneBounds Bounds { get; init; } = new(-2_000_000, -2_000_000, 2_000_000, 2_000_000);
 
     public int InterestRadiusMm { get; init; } = 100_000;
 
@@ -40,13 +43,11 @@ public sealed record ZoneOptions
     /// <summary>Movement intents older than this many ticks without a refresh stop the player.</summary>
     public int IntentTimeoutTicks { get; init; } = 10;
 
-    /// <summary>Skitters scattered in a ring around the spawn area.</summary>
-    public int MobCount { get; init; } = 40;
-
-    /// <summary>Mob spawns fall between these distances from the origin.</summary>
-    public int MobRingInnerMm { get; init; } = 40_000;
-
-    public int MobRingOuterMm { get; init; } = 120_000;
+    /// <summary>
+    /// Test hook: replaces the zone's spawn list with this many of its first spawn group's mob.
+    /// Null uses the content as authored.
+    /// </summary>
+    public int? MobCount { get; init; }
 
     public int PlayerRespawnTicks { get; init; } = 100;
 
@@ -69,6 +70,9 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 {
     private readonly ZoneOptions _options;
     private readonly IZoneOutbox _outbox;
+    private readonly ContentPack _content;
+    private readonly ZoneDef _zone;
+    private readonly WeaponProfile _starterWeapon;
     private readonly DeterministicRandom _rng;
     private readonly Dictionary<ClientRef, Player> _byClient = [];
     private readonly Dictionary<uint, Entity> _byId = [];
@@ -89,12 +93,16 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     private uint _nextEntityId = 1;
     private uint _gridTick = uint.MaxValue;
 
-    public ZoneSimulation(ZoneOptions options, IZoneOutbox outbox)
+    public ZoneSimulation(ZoneOptions options, IZoneOutbox outbox, ContentPack? content = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(outbox);
         _options = options;
         _outbox = outbox;
+        _content = content ?? ContentPacks.Embedded;
+        _zone = _content.Zones[options.ZoneKey];
+        var start = _content.NewCharacter;
+        _starterWeapon = _content.Items[start.StartingWeaponKey].WeaponAt(start.StartingWeaponQl)!;
         _rng = new DeterministicRandom(options.Seed);
         _grid = new SpatialGrid(options.GridCellMm);
         SpawnMobs();
@@ -108,6 +116,10 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
     public IReadOnlyList<Mob> Mobs => _mobs;
 
+    public ZoneDef Zone => _zone;
+
+    public ContentPack Content => _content;
+
     public Entity? Find(uint entityId) => _byId.GetValueOrDefault(entityId);
 
     /// <summary>Adds a player at a spawn point and sends them <see cref="Welcome"/>.</summary>
@@ -118,9 +130,9 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             throw new InvalidOperationException($"{client} already joined.");
         }
         var character = new Character(Profession.Operative, Origin.Baseline);
-        StarterContent.ApplyNewPlayerStats(character.Stats);
+        _content.NewCharacter.ApplyStats(character.Stats);
 
-        var player = new Player(_nextEntityId++, client, accountId, name, character)
+        var player = new Player(_nextEntityId++, client, accountId, name, character, _starterWeapon)
         {
             Position = SpawnPoint(client),
         };
@@ -131,11 +143,12 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         Send(player, new Welcome
         {
             EntityId = player.EntityId,
-            ZoneId = _options.ZoneId,
+            ZoneId = _zone.Id,
             ServerTick = Tick,
             TickRateHz = (ushort)_options.TickRateHz,
             X = player.Position.X,
             Z = player.Position.Z,
+            ContentHash = _content.Hash,
         });
         SendStatusIfChanged(player);
         return player;
@@ -274,7 +287,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             {
                 continue;
             }
-            e.Position = Movement.Step(e.Position, e.DirX, e.DirZ, e.CurrentSpeed, dt, _options.Bounds);
+            e.Position = Movement.Step(e.Position, e.DirX, e.DirZ, e.CurrentSpeed, dt, _zone.Bounds);
             e.Yaw = Movement.YawByte(e.DirX, e.DirZ, e.Yaw);
         }
     }
