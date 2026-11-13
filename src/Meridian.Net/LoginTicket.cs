@@ -7,12 +7,11 @@ namespace Meridian.Net;
 /// <summary>What the auth service vouches for. Opaque to the client.</summary>
 /// <param name="TicketId">Random id; the gateway accepts each ticket once.</param>
 /// <param name="AccountId">The authenticated account.</param>
-/// <param name="CharacterName">Display name for M0 (characters arrive with persistence).</param>
+/// <param name="CharacterName">The character's name (also shown to other players).</param>
 /// <param name="SessionKey">32-byte key the client also received over TLS.</param>
 /// <param name="ExpiresAt">Unix seconds after which the gateway refuses the ticket.</param>
-/// <param name="Profession">The character's profession id (sealed so the client cannot change it).</param>
-/// <param name="Origin">The character's origin id.</param>
-public sealed record LoginTicket(ulong TicketId, ulong AccountId, string CharacterName, byte[] SessionKey, long ExpiresAt, byte Profession, byte Origin);
+/// <param name="CharacterId">The stored character this session plays; auth checked it belongs to the account.</param>
+public sealed record LoginTicket(ulong TicketId, ulong AccountId, string CharacterName, byte[] SessionKey, long ExpiresAt, ulong CharacterId);
 
 /// <summary>
 /// Seals tickets with a key shared only by auth and gateway (ChaCha20-Poly1305, random nonce).
@@ -25,8 +24,9 @@ public sealed class TicketSealer : IDisposable
     private const int TagBytes = 16;
     private const int MaxNameBytes = 32;
 
-    /// <summary>ticket id, account, expiry (8 each), profession, origin, name length (1 each).</summary>
-    private const int HeaderBytes = 8 + 8 + 8 + 1 + 1 + 1;
+    /// <summary>ticket id, account, expiry, character (8 each), name length (1).</summary>
+    private const int HeaderBytes = 8 + 8 + 8 + 8 + 1;
+    private const int NameLengthAt = 32;
 
     private readonly ChaCha20Poly1305 _aead;
 
@@ -53,9 +53,8 @@ public sealed class TicketSealer : IDisposable
         BinaryPrimitives.WriteUInt64LittleEndian(p, ticket.TicketId);
         BinaryPrimitives.WriteUInt64LittleEndian(p[8..], ticket.AccountId);
         BinaryPrimitives.WriteInt64LittleEndian(p[16..], ticket.ExpiresAt);
-        p[24] = ticket.Profession;
-        p[25] = ticket.Origin;
-        p[26] = (byte)name.Length;
+        BinaryPrimitives.WriteUInt64LittleEndian(p[24..], ticket.CharacterId);
+        p[NameLengthAt] = (byte)name.Length;
         name.CopyTo(p[HeaderBytes..]);
         ticket.SessionKey.CopyTo(p[(HeaderBytes + name.Length)..]);
 
@@ -86,7 +85,7 @@ public sealed class TicketSealer : IDisposable
         }
 
         var p = plain.AsSpan();
-        int nameLength = p[26];
+        int nameLength = p[NameLengthAt];
         if (HeaderBytes + nameLength + SessionCipher.KeyBytes != length)
         {
             return null;
@@ -97,8 +96,7 @@ public sealed class TicketSealer : IDisposable
             Encoding.UTF8.GetString(p.Slice(HeaderBytes, nameLength)),
             p.Slice(HeaderBytes + nameLength, SessionCipher.KeyBytes).ToArray(),
             BinaryPrimitives.ReadInt64LittleEndian(p[16..]),
-            p[24],
-            p[25]);
+            BinaryPrimitives.ReadUInt64LittleEndian(p[24..]));
         CryptographicOperations.ZeroMemory(plain);
         return ticket;
     }

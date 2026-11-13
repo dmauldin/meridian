@@ -3,7 +3,7 @@ using System.Globalization;
 using Meridian.Bots;
 using Meridian.Net.Client;
 
-// Usage: Meridian.Bots [--count 100] [--duration 60] [--auth http://127.0.0.1:5080/] [--password dev]
+// Usage: Meridian.Bots [--count 100] [--duration 60] [--auth http://127.0.0.1:5080/] [--password botpassword]
 //                      [--min-snapshot-hz 8] [--hunt]
 //   --hunt  bots target the nearest mob, close in and auto-attack (combat load).
 // Exit code 0 when every bot connected and received snapshots at the required rate.
@@ -11,14 +11,16 @@ var count = IntArg("--count", 100);
 var durationSeconds = IntArg("--duration", 60);
 var minSnapshotHz = IntArg("--min-snapshot-hz", 8);
 var authUrl = StringArg("--auth", "http://127.0.0.1:5080/");
-var password = StringArg("--password", "dev");
+var password = StringArg("--password", "botpassword");
 var hunt = args.Contains("--hunt");
 
 using var http = new HttpClient { BaseAddress = new Uri(authUrl) };
 var auth = new AuthClient(http);
 
 Console.WriteLine($"logging in {count} bots via {authUrl}");
-var logins = await Task.WhenAll(Enumerable.Range(0, count).Select(i => auth.LoginAsync($"bot{i:D4}", password)));
+// Each bot is account botNNNN playing character BotNNNN, registered and created on first run.
+var logins = await Task.WhenAll(Enumerable.Range(0, count).Select(i =>
+    auth.QuickPlayAsync(new Credentials($"bot{i:D4}", password), $"Bot{i:D4}", "operative", "baseline")));
 
 var bots = logins.Select((login, i) => new Bot(i, login, login.GatewayHost, login.GatewayPort, hunt)).ToList();
 var stopwatch = Stopwatch.StartNew();

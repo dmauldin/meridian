@@ -13,6 +13,7 @@
     <Project Path="src/Meridian.Net/Meridian.Net.csproj" />
     <Project Path="src/Meridian.Wire.Gen/Meridian.Wire.Gen.csproj" />
     <Project Path="src/Meridian.Wire/Meridian.Wire.csproj" />
+    <Project Path="src/Meridian.Persistence/Meridian.Persistence.csproj" />
     <Project Path="src/Meridian.Server.Auth/Meridian.Server.Auth.csproj" />
     <Project Path="src/Meridian.Server.Gateway/Meridian.Server.Gateway.csproj" />
     <Project Path="src/Meridian.Server.Zone/Meridian.Server.Zone.csproj" />
@@ -22,6 +23,7 @@
     <Project Path="tests/Meridian.Content.Tests/Meridian.Content.Tests.csproj" />
     <Project Path="tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj" />
     <Project Path="tests/Meridian.Net.Tests/Meridian.Net.Tests.csproj" />
+    <Project Path="tests/Meridian.Persistence.Tests/Meridian.Persistence.Tests.csproj" />
     <Project Path="tests/Meridian.Server.Tests/Meridian.Server.Tests.csproj" />
     <Project Path="tests/Meridian.Wire.Tests/Meridian.Wire.Tests.csproj" />
   </Folder>

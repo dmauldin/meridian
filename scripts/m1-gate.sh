@@ -24,6 +24,11 @@ dotnet build "$ROOT/client/Meridian.Client.csproj" -v quiet -nologo >>"$OUT/buil
 # First run on a fresh checkout: let Godot import the project once.
 "$GODOT" --headless --path "$ROOT/client" --import >>"$OUT/build.log" 2>&1 || true
 
+# A fresh development store per run, shared by auth and zone (accounts and characters are
+# created on first login).
+export MERIDIAN_STORE=file MERIDIAN_STORE_DIR="$OUT/store"
+rm -rf "$MERIDIAN_STORE_DIR"
+
 pids=()
 cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; wait 2>/dev/null || true; }
 trap cleanup EXIT
@@ -40,7 +45,7 @@ grep -q "connected to zone" "$OUT/gateway.log" || { echo "gateway never reached 
 
 echo "running two headless clients on autopilot..."
 run_client() {
-  "$GODOT" --headless --path "$ROOT/client" -- --autopilot --user "$1" --pass dev --timeout "$TIMEOUT" >"$OUT/client-$1.log" 2>&1
+  "$GODOT" --headless --path "$ROOT/client" -- --autopilot --user "$1" --pass autopilot1 --timeout "$TIMEOUT" >"$OUT/client-$1.log" 2>&1
 }
 set +e
 run_client Ann & a=$!

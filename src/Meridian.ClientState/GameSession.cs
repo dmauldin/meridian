@@ -30,20 +30,26 @@ public sealed class GameSession : IDisposable
 
     public string? DisconnectReason => Connection.DisconnectReason;
 
-    /// <summary>Logs in over HTTP and starts connecting to the gateway it names.</summary>
-    /// <exception cref="HttpRequestException">Login was refused or the auth service is unreachable.</exception>
-    public static Task<GameSession> StartAsync(HttpClient http, string username, string password, CancellationToken cancellationToken = default) =>
-        StartAsync(http, new LoginRequest(username, password), cancellationToken);
-
-    /// <summary>Logs in with a full request (including the development profession/origin choice).</summary>
-    public static async Task<GameSession> StartAsync(HttpClient http, LoginRequest request, CancellationToken cancellationToken = default)
+    /// <summary>Starts connecting to the gateway <paramref name="play"/> names, as the character it was issued for.</summary>
+    public static GameSession Start(PlayResponse play, string characterName)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        var login = await new AuthClient(http).LoginAsync(request, cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(play);
         var world = new ClientWorld();
         var connection = new GameConnection(world);
-        connection.Connect(login.GatewayHost, login.GatewayPort, login);
-        return new GameSession(connection, world, request.Username);
+        connection.Connect(play.GatewayHost, play.GatewayPort, play);
+        return new GameSession(connection, world, characterName);
+    }
+
+    /// <summary>
+    /// Development shortcut (headless autopilot, tests): registers if needed, logs in, creates the
+    /// character if the account lacks it, and connects. See <see cref="AuthClient.QuickPlayAsync"/>.
+    /// </summary>
+    /// <exception cref="AuthException">The auth service refused a step.</exception>
+    public static async Task<GameSession> QuickStartAsync(
+        HttpClient http, Credentials credentials, string characterName, string profession, string origin, CancellationToken cancellationToken = default)
+    {
+        var play = await new AuthClient(http).QuickPlayAsync(credentials, characterName, profession, origin, cancellationToken).ConfigureAwait(false);
+        return Start(play, characterName);
     }
 
     /// <summary>

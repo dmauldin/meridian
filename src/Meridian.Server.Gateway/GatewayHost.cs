@@ -136,6 +136,15 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
     }
 
+    public void OnDropClient(NetPeer context, in DropClient message)
+    {
+        if (_byConnection.TryGetValue(message.ConnectionId, out var session))
+        {
+            _log($"zone dropped connection {message.ConnectionId}: {message.Reason}");
+            Kick(session, message.Reason ?? "Disconnected by the server.");
+        }
+    }
+
     public void OnToClient(NetPeer context, in ToClient message)
     {
         if (!_byConnection.TryGetValue(message.ConnectionId, out var session) || message.Payload is null)
@@ -222,8 +231,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             ConnectionId = session.ConnectionId,
             AccountId = ticket.AccountId,
             Name = ticket.CharacterName,
-            Profession = ticket.Profession,
-            Origin = ticket.Origin,
+            CharacterId = ticket.CharacterId,
         });
     }
 

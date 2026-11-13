@@ -5,6 +5,7 @@ using Meridian.Core.Content;
 using Meridian.Core.Stats;
 using Meridian.Core.Randomness;
 using Meridian.Core.World;
+using Meridian.Persistence;
 using Meridian.Wire;
 using Meridian.Wire.Delta;
 
@@ -55,6 +56,12 @@ public sealed record ZoneOptions
     /// <summary>The "in combat" flag stays set this long after the last hit.</summary>
     public int CombatFlagTicks { get; init; } = 100;
 
+    /// <summary>
+    /// A changed character is checkpointed (queued for saving) at most this often: 600 ticks = 30 s
+    /// at 20 Hz. Staggered by entity id like snapshots. Leaving always checkpoints.
+    /// </summary>
+    public int CheckpointEveryTicks { get; init; } = 600;
+
     public int TickMs => 1_000 / TickRateHz;
 }
 
@@ -78,6 +85,8 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     private readonly Dictionary<uint, Entity> _byId = [];
     private readonly List<Entity> _entities = [];
     private readonly List<Player> _players = [];
+    private readonly Dictionary<ulong, Player> _byCharacter = [];
+    private List<CharacterRecord> _checkpoints = [];
     private readonly List<Mob> _mobs = [];
     private readonly SpatialGrid _grid;
     private readonly byte[] _packet = new byte[Envelope.MaxPacketBytes];
@@ -121,17 +130,12 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
     public Entity? Find(uint entityId) => _byId.GetValueOrDefault(entityId);
 
-    /// <summary>Adds a player at a spawn point and sends them <see cref="Welcome"/>.</summary>
     /// <summary>
-    /// Adds a player at a spawn point and sends them <see cref="Welcome"/>. Profession and origin
-    /// come from the login ticket; ids content does not define fall back to the defaults.
+    /// Test and tool convenience: joins a fresh, unstored character (id 0, never checkpointed).
+    /// Ids content does not define fall back to Operative/Baseline.
     /// </summary>
     public Player Join(ClientRef client, ulong accountId, string name, Profession profession = Profession.Operative, Origin origin = Origin.Baseline)
     {
-        if (_byClient.ContainsKey(client))
-        {
-            throw new InvalidOperationException($"{client} already joined.");
-        }
         if (!_content.Professions.ContainsId((int)profession))
         {
             profession = Profession.Operative;
@@ -140,11 +144,45 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         {
             origin = Origin.Baseline;
         }
-        var build = CharacterBuild.Create(_content, profession, origin);
-        var player = new Player(_nextEntityId++, client, accountId, name, build, build.StartingWeapon(_content))
+        return Join(client, CharacterRecords.New(_content, accountId, name, profession, origin))!;
+    }
+
+    /// <summary>
+    /// Adds a stored character and sends them <see cref="Welcome"/>. A character saved in this zone
+    /// alive comes back where it was with the health it had; otherwise it starts at a spawn point
+    /// with full health. Returns null if content no longer defines its profession or origin.
+    /// The character must not already be in the zone (see <see cref="FindCharacter"/>).
+    /// </summary>
+    public Player? Join(ClientRef client, CharacterRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (_byClient.ContainsKey(client))
         {
-            Position = SpawnPoint(client),
-        };
+            throw new InvalidOperationException($"{client} already joined.");
+        }
+        if (record.Id != 0 && _byCharacter.ContainsKey(record.Id))
+        {
+            throw new InvalidOperationException($"character {record.Id} is already in the zone.");
+        }
+        if (record.ToBuild(_content) is not { } build)
+        {
+            return null;
+        }
+        var player = new Player(_nextEntityId++, client, record, build, build.StartingWeapon(_content));
+        if (record.Placement is { Health: > 0 } saved && saved.Zone == _zone.Key)
+        {
+            player.Position = saved.Position;
+            player.Health = Math.Min(saved.Health, player.MaxHealth);
+        }
+        else
+        {
+            player.Position = SpawnPoint(client);
+        }
+        player.LastSavedKey = player.SaveKey;
+        if (record.Id != 0)
+        {
+            _byCharacter.Add(record.Id, player);
+        }
         _byClient.Add(client, player);
         _players.Add(player);
         Add(player);
@@ -164,6 +202,52 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         return player;
     }
 
+    /// <summary>The player playing this stored character, if it is in the zone.</summary>
+    public Player? FindCharacter(ulong characterId) => _byCharacter.GetValueOrDefault(characterId);
+
+    /// <summary>The player's character as it would be saved now. Version is the one it was loaded with.</summary>
+    public CharacterRecord Snapshot(Player player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        var health = player.Dead ? 0 : player.Health;
+        return player.Record.WithProgress(player.Build, new Placement(_zone.Key, player.Position, health));
+    }
+
+    /// <summary>
+    /// Characters to save since the last call: changed players at their checkpoint, and everyone
+    /// who left. The host hands them to the store; the simulation does no I/O.
+    /// </summary>
+    public IReadOnlyList<CharacterRecord> DrainCheckpoints()
+    {
+        if (_checkpoints.Count == 0)
+        {
+            return [];
+        }
+        var drained = _checkpoints;
+        _checkpoints = [];
+        return drained;
+    }
+
+    /// <summary>Checkpoints every changed character now (shutdown).</summary>
+    public void CheckpointAll()
+    {
+        foreach (var p in _players)
+        {
+            CheckpointIfChanged(p);
+        }
+    }
+
+    private void CheckpointIfChanged(Player p)
+    {
+        var key = p.SaveKey;
+        if (p.CharacterId == 0 || key == p.LastSavedKey)
+        {
+            return;
+        }
+        p.LastSavedKey = key;
+        _checkpoints.Add(Snapshot(p));
+    }
+
     public bool Leave(ClientRef client)
     {
         if (!_byClient.Remove(client, out var player))
@@ -173,6 +257,11 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         _players.Remove(player);
         _entities.Remove(player);
         _byId.Remove(player.EntityId);
+        if (player.CharacterId != 0)
+        {
+            _byCharacter.Remove(player.CharacterId);
+            _checkpoints.Add(Snapshot(player)); // always save on leave, changed or not
+        }
         foreach (var mob in _mobs)
         {
             mob.Threat.Remove(player.EntityId);
@@ -214,6 +303,15 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         {
             SendStatusIfChanged(p);
             SendSheetIfChanged(p);
+        }
+
+        var checkpointEvery = (uint)_options.CheckpointEveryTicks;
+        foreach (var p in _players)
+        {
+            if ((Tick + p.EntityId) % checkpointEvery == 0)
+            {
+                CheckpointIfChanged(p);
+            }
         }
 
         // Stagger snapshots across ticks (by entity id) so the cost is spread evenly instead of

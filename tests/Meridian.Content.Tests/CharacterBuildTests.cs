@@ -176,3 +176,46 @@ public class CharacterBuildTests
         }
     }
 }
+
+public class CharacterBuildStorageTests
+{
+    private static readonly ContentPack Pack = Meridian.Content.ContentPacks.Embedded;
+
+    [Fact]
+    public void Trained_raises_round_trip_through_load()
+    {
+        var b = CharacterBuild.Create(Pack, Profession.Medic, Origin.Nightborn);
+        b.AddXp(5_000);
+        Assert.Equal(TrainResult.Trained, b.Train(Stat.BioWeaving, 7));
+        Assert.Equal(TrainResult.Trained, b.Train(Stat.Psyche, 3));
+
+        Assert.Equal([new(Stat.Psyche, 3), new(Stat.BioWeaving, 7)], b.Trained().OrderBy(t => t.Key).ToList());
+        var loaded = CharacterBuild.Load(Pack, Profession.Medic, Origin.Nightborn, b.Level, b.Xp, b.UnspentPoints, b.Trained());
+        foreach (var stat in Meridian.Core.Stats.StatIndex.All)
+        {
+            Assert.Equal(b.Character.Get(stat), loaded.Character.Get(stat));
+        }
+        Assert.Equal((b.Level, b.Xp, b.UnspentPoints), (loaded.Level, loaded.Xp, loaded.UnspentPoints));
+    }
+
+    [Fact]
+    public void A_fresh_character_has_nothing_trained()
+    {
+        Assert.Empty(CharacterBuild.Create(Pack, Profession.Warden, Origin.Baseline).Trained());
+    }
+
+    [Fact]
+    public void Load_drops_raises_it_cannot_trust()
+    {
+        var loaded = CharacterBuild.Load(Pack, Profession.Operative, Origin.Baseline, level: 999, xp: -5, unspentPoints: -1,
+            [new(Stat.MaxHealth, 500), new(Stat.Rifle, -10), new(Stat.Pistol, 4)]);
+        var clean = CharacterBuild.Load(Pack, Profession.Operative, Origin.Baseline, level: 999, xp: 0, unspentPoints: 0, [new(Stat.Pistol, 4)]);
+        foreach (var stat in Meridian.Core.Stats.StatIndex.All)
+        {
+            Assert.Equal(clean.Character.Get(stat), loaded.Character.Get(stat)); // MaxHealth (derived) and Rifle (negative) ignored
+        }
+        Assert.Equal(CharacterBuild.Create(Pack, Profession.Operative, Origin.Baseline).Character.Get(Stat.Pistol) + 4, loaded.Character.Get(Stat.Pistol));
+        Assert.Equal(Pack.Progression.MaxLevel, loaded.Level);
+        Assert.Equal((0L, 0), (loaded.Xp, loaded.UnspentPoints));
+    }
+}

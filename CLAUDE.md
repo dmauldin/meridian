@@ -20,6 +20,8 @@ The owner is a senior engineer who reviews every change. Optimise for reviewabil
   `dotnet run --project src/Meridian.ContentCompiler` and commit `content/meridian.pack.json`;
   a test fails if it is stale. Content ids are append-only like wire ids. Never put tuning
   numbers for items, Protocols or mobs in C#.
+- Schema changes are new files in `db/migrations` (never edit a merged one); run
+  `scripts/db-check.sh`. Ids stored in the database are wire/content ids: append-only.
 - Everything from a client is hostile: bound every length, reject trailing bytes, never
   trust results, only intents.
 - Tuning numbers live in `StatCatalog.Default` and `Formulas`; changing one must change a

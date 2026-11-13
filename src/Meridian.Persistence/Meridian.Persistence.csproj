@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Accounts and characters: records, the store interface, password hashing, and the
+    dependency-free stores (in-memory for tests, JSON file for local development).
+    The Postgres store lives beside these once Npgsql is available.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Meridian.Core/Meridian.Core.csproj" />
+  </ItemGroup>
+</Project>

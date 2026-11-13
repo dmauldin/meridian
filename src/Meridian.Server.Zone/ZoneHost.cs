@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LiteNetLib;
 using Meridian.Net;
+using Meridian.Persistence;
 using Meridian.Wire;
 
 namespace Meridian.Server.Zone;
@@ -14,12 +15,17 @@ public sealed record ZoneHostOptions
 
     public TimeSpan MetricsInterval { get; init; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>How long shutdown waits for queued saves to reach the store.</summary>
+    public TimeSpan ShutdownFlushTimeout { get; init; } = TimeSpan.FromSeconds(15);
+
     public ZoneOptions Zone { get; init; } = new();
 }
 
 /// <summary>
 /// Runs a <see cref="ZoneSimulation"/> at a fixed tick rate and connects it to gateways.
-/// Everything happens on the thread that calls <see cref="Run"/>.
+/// Everything that touches the simulation happens on the thread that calls <see cref="Run"/>;
+/// character loads and saves run on background tasks and report back through a queue the tick
+/// thread drains, so store latency never stalls a tick.
 /// </summary>
 public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposable
 {
@@ -28,14 +34,21 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
     private readonly byte[] _buffer = new byte[Envelope.MaxPacketBytes + 64];
     private readonly Dictionary<int, NetPeer> _gateways = [];
     private readonly Action<string> _log;
+    private readonly CharacterSaver _saver;
+    private readonly PlayerSessions _sessions;
+    private readonly CancellationTokenSource _saverStop = new();
+    private Task? _saverLoop;
     private TickMetrics? _metrics;
 
-    public ZoneHost(ZoneHostOptions options, Action<string>? log = null)
+    public ZoneHost(ZoneHostOptions options, IGameStore store, Action<string>? log = null)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(store);
         _options = options;
         _log = log ?? Console.WriteLine;
         Simulation = new ZoneSimulation(options.Zone, this);
+        _saver = new CharacterSaver(store, _log);
+        _sessions = new PlayerSessions(Simulation, store, _saver, Drop, _log);
 
         var listener = new EventBasedNetListener();
         listener.ConnectionRequestEvent += r => r.AcceptIfKey(_options.InternalKey);
@@ -47,7 +60,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         listener.PeerDisconnectedEvent += (p, info) =>
         {
             _gateways.Remove(p.Id);
-            var dropped = Simulation.LeaveGateway(p.Id);
+            var dropped = _sessions.LeaveGateway(p.Id);
             _log($"gateway {p.Id} disconnected ({info.Reason}); removed {dropped} players");
         };
         listener.NetworkReceiveEvent += OnReceive;
@@ -55,6 +68,9 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
     }
 
     public ZoneSimulation Simulation { get; }
+
+    /// <summary>The write-behind saver (exposed for tests and health checks).</summary>
+    public CharacterSaver Saver => _saver;
 
     /// <summary>The bound port (useful when configured with 0 for tests).</summary>
     public int Port => _net.LocalPort;
@@ -68,6 +84,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         {
             throw new InvalidOperationException($"Could not bind UDP port {_options.Port}.");
         }
+        _saverLoop = Task.Run(() => _saver.RunAsync(_saverStop.Token));
         _log($"zone {Simulation.Zone.Key} (content {Simulation.Content.Hash:X16}) listening on udp/{Port} at {_options.Zone.TickRateHz} Hz");
     }
 
@@ -85,6 +102,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         while (!stop.IsCancellationRequested)
         {
             _net.PollEvents();
+            _sessions.RunQueued();
             now = Stopwatch.GetTimestamp();
             if (now < nextTick)
             {
@@ -95,6 +113,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
 
             var start = Stopwatch.GetTimestamp();
             Simulation.Step();
+            _sessions.QueueCheckpoints();
             var end = Stopwatch.GetTimestamp();
             var workMs = (end - start) * 1000.0 / Stopwatch.Frequency;
             var overran = end > nextTick + tickTicks;
@@ -115,6 +134,13 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
                 nextReport = end + metricsTicks;
             }
         }
+
+        // Shutdown: everyone's latest state goes to the store before the process exits.
+        Simulation.CheckpointAll();
+        _sessions.QueueCheckpoints();
+        var pending = _saver.PendingCount;
+        var flushed = _saver.FlushAsync(_options.ShutdownFlushTimeout).GetAwaiter().GetResult();
+        _log(flushed ? $"saved {pending} characters on shutdown" : $"shutdown: {_saver.PendingCount} character saves did not finish in time");
     }
 
     public void Send(ClientRef client, Delivery delivery, ReadOnlySpan<byte> packet)
@@ -141,22 +167,24 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         return buffer[..w.Position];
     }
 
-    public void OnPlayerJoin(NetPeer context, in PlayerJoin message)
-    {
-        var client = new ClientRef(context.Id, message.ConnectionId);
-        try
-        {
-            Simulation.Join(client, message.AccountId, message.Name ?? "?", (Meridian.Core.Characters.Profession)message.Profession, (Meridian.Core.Characters.Origin)message.Origin);
-        }
-        catch (InvalidOperationException e)
-        {
-            // A gateway bug must not take the whole zone down.
-            _log($"rejected join for {client}: {e.Message}");
-        }
-    }
+    public void OnPlayerJoin(NetPeer context, in PlayerJoin message) =>
+        _sessions.BeginJoin(new ClientRef(context.Id, message.ConnectionId), message.AccountId, message.CharacterId);
 
     public void OnPlayerLeave(NetPeer context, in PlayerLeave message) =>
-        Simulation.Leave(new ClientRef(context.Id, message.ConnectionId));
+        _sessions.Leave(new ClientRef(context.Id, message.ConnectionId));
+
+    public void OnDropClient(NetPeer context, in DropClient message) =>
+        _log($"gateway {context.Id} sent DropClient, which only flows zone → gateway");
+
+    /// <summary>Asks the client's gateway to end its session with a reason the player sees.</summary>
+    private void Drop(ClientRef client, string reason)
+    {
+        if (_gateways.TryGetValue(client.GatewayId, out var gateway))
+        {
+            var bytes = Envelope.ToArray(new DropClient { ConnectionId = client.ConnectionId, Reason = reason });
+            gateway.Send(bytes, 1, DeliveryMethod.ReliableOrdered);
+        }
+    }
 
     public void OnFromClient(NetPeer context, in FromClient message)
     {
@@ -175,7 +203,21 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
     public void OnToClient(NetPeer context, in ToClient message) =>
         _log($"gateway {context.Id} sent ToClient, which only flows zone → gateway");
 
-    public void Dispose() => _net.Stop();
+    public void Dispose()
+    {
+        _net.Stop();
+        _saverStop.Cancel();
+        try
+        {
+            _saverLoop?.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException)
+        {
+            // The loop ends by cancellation.
+        }
+        _saverStop.Dispose();
+        _saver.Dispose();
+    }
 
     private void OnReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
     {
