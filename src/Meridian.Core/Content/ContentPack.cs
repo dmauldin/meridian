@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using Meridian.Core.Items;
 
 namespace Meridian.Core.Content;
 
@@ -14,6 +15,9 @@ public sealed class ContentPack
         IEnumerable<ProtocolTemplate> protocols,
         IEnumerable<MobDef> mobs,
         IEnumerable<ZoneDef> zones,
+        IEnumerable<ProfessionDef> professions,
+        IEnumerable<OriginDef> origins,
+        ProgressionDef progression,
         NewCharacterDef newCharacter,
         ulong hash)
     {
@@ -22,6 +26,9 @@ public sealed class ContentPack
         Protocols = Index(protocols, p => p.Id, p => p.Key, "protocol");
         Mobs = Index(mobs, m => m.Id, m => m.Key, "mob");
         Zones = Index(zones, z => (int)z.Id, z => z.Key, "zone");
+        Professions = Index(professions, p => (int)p.Id, p => p.Key, "profession");
+        Origins = Index(origins, o => (int)o.Id, o => o.Key, "origin");
+        Progression = progression;
         NewCharacter = newCharacter;
         Hash = hash;
         Validate();
@@ -36,6 +43,14 @@ public sealed class ContentPack
     public Catalog<MobDef> Mobs { get; }
 
     public Catalog<ZoneDef> Zones { get; }
+
+    /// <summary>Playable professions; ids are <see cref="Characters.Profession"/> values.</summary>
+    public Catalog<ProfessionDef> Professions { get; }
+
+    /// <summary>Playable origins; ids are <see cref="Characters.Origin"/> values.</summary>
+    public Catalog<OriginDef> Origins { get; }
+
+    public ProgressionDef Progression { get; }
 
     public NewCharacterDef NewCharacter { get; }
 
@@ -62,9 +77,48 @@ public sealed class ContentPack
                 }
             }
         }
-        if (!Items.TryGet(NewCharacter.StartingWeaponKey, out var weapon) || weapon.Weapon is null)
+        foreach (var p in Professions.All)
         {
-            throw new InvalidDataException($"new_character: starting weapon '{NewCharacter.StartingWeaponKey}' is not a weapon item.");
+            if (!Items.TryGet(p.StartingWeaponKey, out var weapon) || weapon.Weapon is null)
+            {
+                throw new InvalidDataException($"profession '{p.Key}': starting weapon '{p.StartingWeaponKey}' is not a weapon item.");
+            }
+            if (p.GroupTiers.ContainsKey(Characters.SkillGroup.Attribute))
+            {
+                throw new InvalidDataException($"profession '{p.Key}': attributes are priced by origin, not profession.");
+            }
+            foreach (var stat in p.SkillTiers.Keys.Concat(p.StartingSkills.Keys))
+            {
+                if (!Characters.Skills.IsTrainable(stat) || Characters.Skills.GroupOf(stat) == Characters.SkillGroup.Attribute)
+                {
+                    throw new InvalidDataException($"profession '{p.Key}': {stat} is not a profession skill.");
+                }
+            }
+        }
+        foreach (var o in Origins.All)
+        {
+            foreach (var stat in o.Attributes.Keys.Concat(o.AttributeTiers.Keys))
+            {
+                if (!Characters.Skills.IsTrainable(stat) || Characters.Skills.GroupOf(stat) != Characters.SkillGroup.Attribute)
+                {
+                    throw new InvalidDataException($"origin '{o.Key}': {stat} is not an attribute.");
+                }
+            }
+        }
+        foreach (var tier in new[] { Characters.CostTier.Cheap, Characters.CostTier.Normal, Characters.CostTier.Expensive })
+        {
+            if (!Progression.Tiers.TryGetValue(tier, out var rule) || rule.CostPerPoint <= 0 || rule.CapPerLevel <= 0)
+            {
+                throw new InvalidDataException($"progression: tier {tier} needs a positive cost and cap.");
+            }
+        }
+        if (Progression.Tiers.ContainsKey(Characters.CostTier.Locked))
+        {
+            throw new InvalidDataException("progression: the Locked tier cannot have a rule.");
+        }
+        if (Progression.MaxLevel is < 2 or > QlCurve.MaxQl)
+        {
+            throw new InvalidDataException($"progression: max_level must be 2..{QlCurve.MaxQl}.");
         }
     }
 

@@ -86,11 +86,12 @@ could not pull base images).
    `dotnet run --project src/Meridian.Server.Zone`, `...Gateway`, `...Auth`.
 3. Open `client/project.godot` in Godot and press Play (F5), or from a shell:
    `godot --path client`.
-4. Log in with any name and the password `dev`. To play with a friend, run the servers on a
+4. Log in with any name and the password `dev`, choosing a profession and origin. To play with a friend, run the servers on a
    machine you both reach and set `MERIDIAN_PUBLIC_GATEWAY_HOST` on auth to its address.
 
 Controls: WASD move, right-drag to look, wheel to zoom, Tab or left-click to target,
-Q toggles auto-attack, Esc clears the target, Enter chats.
+Q toggles auto-attack, Esc clears the target, Enter chats. `/train Rifle 10` spends skill
+points (a proper training window arrives in M2.5).
 
 Headless autoplay (what the M1 gate uses):
 `godot --headless --path client -- --autopilot --user Ann --pass dev --timeout 120`
@@ -129,7 +130,30 @@ counts as 1), scaled by the attacker's `ThreatModifier` stat, which Protocols ca
 lower. After a kill the corpse stays targeted until the player clears it. Dead mobs
 respawn at their spawn point; dead players respawn at a spawn point after 5 s at full health.
 
-## Known limits and next steps (M1)
+## Characters (M2)
+
+A character is a profession (Warden, Medic, Operative, Overload so far) and an origin
+(Baseline, Nightborn). All of it is content (`content/professions.yaml`, `origins.yaml`,
+`progression.yaml`); the rules are `CharacterBuild` in `Meridian.Core`, shared by the
+server and the client so the client can show costs and caps without asking.
+
+- **Starting values**: common stats from `new_character.yaml`, then origin attributes, then
+  profession starting skills on top.
+- **Cost tiers**: every trainable stat is Cheap, Normal, Expensive or Locked for a given
+  character. Attributes are priced by origin; skills by profession (a group default with
+  per-skill exceptions). Cost per point and cap per level come from the tier.
+- **Caps**: starting value + level × tier cap per level. Training checks, in order: valid
+  amount, trainable, not locked, under the cap, enough points.
+- **Experience**: everyone on a mob's threat list when it dies gets its full XP (no split, so
+  grouping never costs anyone). Levelling grants points from the progression curve plus the
+  origin's bonus, and heals to the new maximum.
+
+The zone sends a `CharacterSheet` (every stat's base and effective value) on join and
+whenever stats, XP or points change; `XpGained` and `Notice` (training refusals) are events.
+Until persistence lands (M2.3), the profession and origin are chosen at login and ride in
+the sealed ticket; characters are still created fresh on each join.
+
+## Known limits and next steps
 
 - **No persistence yet.** Auth accepts any valid username with the dev password; characters
   are created fresh on join. Postgres and real accounts arrive in M2.
@@ -141,5 +165,8 @@ respawn at their spawn point; dead players respawn at a spawn point after 5 s at
   counts asks for it.
 - **The auth service speaks plain HTTP** for local development. Production must put TLS in
   front of it; session keys must never travel in clear.
-- **Skill training costs and caps** (points per level, cost tiers by profession and origin)
-  are deferred to M2 with the rest of the build loop.
+- **Only four professions and two origins** are in content; the remaining ids are reserved.
+  Asking for one at login is refused.
+- **Single-tick spikes on the shared CI box.** The load gate's 5 s windows hold 100 ticks, so
+  their p99 is the second-worst tick; an isolated 8–30 ms pause (seen on this branch and its
+  parent alike) can fail a window. Worth computing p99 over the whole run instead.

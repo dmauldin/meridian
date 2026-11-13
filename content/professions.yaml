@@ -1,0 +1,30 @@
+# The four vertical-slice professions. group_costs price whole skill groups (Body, Melee,
+# Ranged, Initiative, Defence, Lattice, Tech; unlisted = normal); skill_costs are exceptions.
+# starting_skills are added to new_character.yaml's common stats.
+- profession: Warden
+  name: Warden
+  starting_weapon: { item: blunt.shock_maul, ql: 1 }
+  group_costs: { Body: cheap, Melee: cheap, Defence: cheap, Ranged: expensive, Lattice: expensive, Tech: expensive }
+  skill_costs: { MindCraft: normal }
+  starting_skills: { BodyDevelopment: 15, Blunt: 25, Parry: 10, MindCraft: 5 }
+
+- profession: Medic
+  name: Medic
+  starting_weapon: { item: rifle.combine_carbine, ql: 1 }
+  group_costs: { Melee: expensive, Lattice: expensive, Tech: cheap }
+  skill_costs: { BioWeaving: cheap }
+  starting_skills: { BioWeaving: 25, Treatment: 10, FirstAid: 15 }
+
+- profession: Operative
+  name: Operative
+  starting_weapon: { item: rifle.combine_carbine, ql: 1 }
+  group_costs: { Ranged: cheap, Initiative: cheap, Melee: expensive, Tech: expensive }
+  skill_costs: { KineticFlux: cheap, HeavyWeapons: expensive }
+  starting_skills: { Rifle: 10, AimedShot: 5, KineticFlux: 20 }
+
+- profession: Overload
+  name: Overload
+  starting_weapon: { item: pistol.combine_sidearm, ql: 1 }
+  group_costs: { Lattice: cheap, Ranged: expensive, Melee: expensive, Body: expensive }
+  skill_costs: { Pistol: normal, ProtocolInit: cheap }
+  starting_skills: { MatterShaping: 25, KineticFlux: 10, Pistol: 15 }

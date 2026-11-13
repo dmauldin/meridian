@@ -1,0 +1,13 @@
+# Playable origins. Attributes are priced by origin; unlisted attributes cost "normal".
+# Heavyworlder and Splice arrive after the vertical slice.
+- origin: Baseline
+  name: Baseline
+  bonus_points_per_level: 1
+  attributes: { Strength: 20, Agility: 20, Stamina: 20, Intellect: 20, Psyche: 20, Sense: 20 }
+  attribute_costs: {}
+
+- origin: Nightborn
+  name: Nightborn
+  bonus_points_per_level: 0
+  attributes: { Strength: 14, Agility: 20, Stamina: 18, Intellect: 26, Psyche: 26, Sense: 20 }
+  attribute_costs: { Intellect: cheap, Psyche: cheap, Strength: expensive, Stamina: expensive }

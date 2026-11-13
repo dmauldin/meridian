@@ -2,6 +2,7 @@ using Meridian.Content;
 using Meridian.Core.Characters;
 using Meridian.Core.Combat;
 using Meridian.Core.Content;
+using Meridian.Core.Stats;
 using Meridian.Core.Randomness;
 using Meridian.Core.World;
 using Meridian.Wire;
@@ -72,7 +73,6 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     private readonly IZoneOutbox _outbox;
     private readonly ContentPack _content;
     private readonly ZoneDef _zone;
-    private readonly WeaponProfile _starterWeapon;
     private readonly DeterministicRandom _rng;
     private readonly Dictionary<ClientRef, Player> _byClient = [];
     private readonly Dictionary<uint, Entity> _byId = [];
@@ -101,8 +101,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         _outbox = outbox;
         _content = content ?? ContentPacks.Embedded;
         _zone = _content.Zones[options.ZoneKey];
-        var start = _content.NewCharacter;
-        _starterWeapon = _content.Items[start.StartingWeaponKey].WeaponAt(start.StartingWeaponQl)!;
+
         _rng = new DeterministicRandom(options.Seed);
         _grid = new SpatialGrid(options.GridCellMm);
         SpawnMobs();
@@ -123,16 +122,26 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     public Entity? Find(uint entityId) => _byId.GetValueOrDefault(entityId);
 
     /// <summary>Adds a player at a spawn point and sends them <see cref="Welcome"/>.</summary>
-    public Player Join(ClientRef client, ulong accountId, string name)
+    /// <summary>
+    /// Adds a player at a spawn point and sends them <see cref="Welcome"/>. Profession and origin
+    /// come from the login ticket; ids content does not define fall back to the defaults.
+    /// </summary>
+    public Player Join(ClientRef client, ulong accountId, string name, Profession profession = Profession.Operative, Origin origin = Origin.Baseline)
     {
         if (_byClient.ContainsKey(client))
         {
             throw new InvalidOperationException($"{client} already joined.");
         }
-        var character = new Character(Profession.Operative, Origin.Baseline);
-        _content.NewCharacter.ApplyStats(character.Stats);
-
-        var player = new Player(_nextEntityId++, client, accountId, name, character, _starterWeapon)
+        if (!_content.Professions.ContainsId((int)profession))
+        {
+            profession = Profession.Operative;
+        }
+        if (!_content.Origins.ContainsId((int)origin))
+        {
+            origin = Origin.Baseline;
+        }
+        var build = CharacterBuild.Create(_content, profession, origin);
+        var player = new Player(_nextEntityId++, client, accountId, name, build, build.StartingWeapon(_content))
         {
             Position = SpawnPoint(client),
         };
@@ -151,6 +160,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             ContentHash = _content.Hash,
         });
         SendStatusIfChanged(player);
+        SendSheetIfChanged(player);
         return player;
     }
 
@@ -203,6 +213,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         foreach (var p in _players)
         {
             SendStatusIfChanged(p);
+            SendSheetIfChanged(p);
         }
 
         // Stagger snapshots across ticks (by entity id) so the cost is spread evenly instead of
@@ -247,6 +258,26 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         }
         var chat = new ChatMessage { FromEntityId = speaker.EntityId, FromName = speaker.Name, Text = text };
         Broadcast(speaker.Position, _options.ChatRadiusMm, chat);
+    }
+
+    public void OnTrainSkill(ClientRef context, in TrainSkill message)
+    {
+        var p = _byClient[context];
+        var stat = (Stat)message.Stat;
+        var result = Enum.IsDefined(stat) ? p.Build.Train(stat, message.Points) : TrainResult.NotTrainable;
+        if (result != TrainResult.Trained)
+        {
+            SendNotice(p, NoticeRefused, result switch
+            {
+                TrainResult.NotEnoughPoints => "Not enough skill points.",
+                TrainResult.AboveCap => $"{stat} cannot go above {p.Build.Cap(stat)} at your level.",
+                TrainResult.Locked => $"Your profession cannot train {stat}.",
+                TrainResult.InvalidAmount => "Invalid amount.",
+                _ => "That cannot be trained.",
+            });
+        }
+        // Health pools may have grown (BodyDevelopment, Stamina); clamp in case they shrank.
+        p.Health = Math.Min(p.Health, p.MaxHealth);
     }
 
     public void OnSnapshotAck(ClientRef context, in SnapshotAck message) =>
@@ -310,6 +341,39 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             Attacking = p.Attacking,
             Dead = p.Dead,
             RunSpeed = p.CurrentSpeed,
+        });
+    }
+
+    private const byte NoticeRefused = 1, NoticeInfo = 2;
+
+    private void SendNotice(Player to, byte kind, string text) =>
+        Send(to, new Notice { Kind = kind, Text = text.Length > 150 ? text[..150] : text });
+
+    /// <summary>Sends the full character sheet when stats, experience or points changed.</summary>
+    private void SendSheetIfChanged(Player p)
+    {
+        var build = p.Build;
+        var key = (p.Character.Stats.Revision, build.Xp, build.UnspentPoints);
+        if (p.LastSentSheet == key)
+        {
+            return;
+        }
+        p.LastSentSheet = key;
+        var stats = new StatValue[StatIndex.All.Count];
+        for (var i = 0; i < stats.Length; i++)
+        {
+            var stat = StatIndex.All[i];
+            stats[i] = new StatValue { Stat = (ushort)stat, BaseValue = p.Character.Stats.GetBase(stat), Value = p.Character.Get(stat) };
+        }
+        Send(p, new CharacterSheet
+        {
+            Profession = (byte)p.Character.Profession,
+            Origin = (byte)p.Character.Origin,
+            Level = (ushort)build.Level,
+            Xp = (uint)Math.Min(uint.MaxValue, build.Xp),
+            XpToNext = (uint)Math.Min(uint.MaxValue, build.XpToNext),
+            UnspentPoints = build.UnspentPoints,
+            Stats = stats,
         });
     }
 

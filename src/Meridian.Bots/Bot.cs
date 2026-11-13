@@ -62,6 +62,10 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
 
     public long Deaths { get; private set; }
 
+    public int Level { get; private set; }
+
+    public long Xp { get; private set; }
+
     public List<int> RttSamplesMs { get; } = [];
 
     public void Tick(long now)
@@ -234,6 +238,14 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
         RttSamplesMs.Add((int)(ElapsedMs(Stopwatch.GetTimestamp()) - message.ClientTimeMs));
 
     public void OnDisconnecting(GameConnection context, in Disconnecting message)
+    {
+    }
+
+    public void OnCharacterSheet(GameConnection context, in CharacterSheet message) => Level = message.Level;
+
+    public void OnXpGained(GameConnection context, in XpGained message) => Xp += message.Amount;
+
+    public void OnNotice(GameConnection context, in Notice message)
     {
     }
 

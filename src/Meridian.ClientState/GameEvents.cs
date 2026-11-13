@@ -20,3 +20,6 @@ public sealed record ChatLine(uint FromEntityId, string From, string Text) : Gam
 
 /// <summary>A system message for the chat log or a banner (disconnects, respawns).</summary>
 public sealed record SystemNotice(string Text) : GameEvent;
+
+/// <summary>Experience earned (and any levels gained with it).</summary>
+public sealed record ExperienceGained(int Amount, int Level, int LevelsGained) : GameEvent;

@@ -58,6 +58,7 @@ Console.WriteLine($"  rtt ms                p50={Pct(rtts, 0.5)} p99={Pct(rtts, 
 Console.WriteLine($"  max entities in view  {bots.Max(b => b.MaxEntitiesSeen)}");
 Console.WriteLine($"  chat lines heard      {bots.Sum(b => b.ChatsHeard)}");
 Console.WriteLine($"  combat                hits={bots.Sum(b => b.Hits)} kills={bots.Sum(b => b.Kills)} deaths={bots.Sum(b => b.Deaths)}");
+Console.WriteLine($"  progression           xp={bots.Sum(b => b.Xp)} max_level={bots.Max(b => b.Level)}");
 Console.WriteLine($"  bytes received        {bots.Sum(b => b.Connection.BytesReceived) / 1024} KiB");
 foreach (var g in failures)
 {

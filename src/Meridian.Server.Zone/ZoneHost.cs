@@ -145,7 +145,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         var client = new ClientRef(context.Id, message.ConnectionId);
         try
         {
-            Simulation.Join(client, message.AccountId, message.Name ?? "?");
+            Simulation.Join(client, message.AccountId, message.Name ?? "?", (Meridian.Core.Characters.Profession)message.Profession, (Meridian.Core.Characters.Origin)message.Origin);
         }
         catch (InvalidOperationException e)
         {

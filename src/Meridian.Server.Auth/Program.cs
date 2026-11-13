@@ -31,6 +31,7 @@ var options = new AuthOptions
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(_ => new TicketSealer(DevSecrets.TicketKeyFromEnvironment("MERIDIAN_TICKET_KEY", Console.Error)));
+builder.Services.AddSingleton(Meridian.Content.ContentPacks.Embedded);
 builder.Services.AddSingleton<LoginService>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, AuthJsonContext.Default));
 

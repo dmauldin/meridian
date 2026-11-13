@@ -75,14 +75,18 @@ public abstract class Entity
 /// <summary>A connected player's simulation state.</summary>
 public sealed class Player : Entity
 {
-    public Player(uint entityId, ClientRef client, ulong accountId, string name, Character character, WeaponProfile weapon)
-        : base(entityId, EntityKind.Player, name, character, weapon)
+    public Player(uint entityId, ClientRef client, ulong accountId, string name, CharacterBuild build, WeaponProfile weapon)
+        : base(entityId, EntityKind.Player, name, build.Character, weapon)
     {
         Client = client;
         AccountId = accountId;
+        Build = build;
     }
 
     public ClientRef Client { get; }
+
+    /// <summary>Level, experience, skill points and training rules.</summary>
+    public CharacterBuild Build { get; }
 
     public ulong AccountId { get; }
 
@@ -98,6 +102,9 @@ public sealed class Player : Entity
     internal Meridian.Wire.Delta.SnapshotHistory History { get; } = new();
 
     internal SelfStatusKey? LastSentStatus { get; set; }
+
+    /// <summary>What the last CharacterSheet reflected, to send it only on change.</summary>
+    internal (long StatsRevision, long Xp, int Points)? LastSentSheet { get; set; }
 }
 
 /// <summary>What <c>SelfStatus</c> last told the player, to send only changes.</summary>

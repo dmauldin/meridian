@@ -44,7 +44,8 @@ public sealed class EndToEndTests : IDisposable
         _logins = new LoginService(
             new AuthOptions { DevPassword = "pw", PublicGatewayPort = _gateway.Port },
             new TicketSealer(TicketKey),
-            TimeProvider.System);
+            TimeProvider.System,
+            Meridian.Content.ContentPacks.Embedded);
 
         WaitUntil(() => _gateway.ZoneConnected, "gateway to reach zone");
     }
@@ -120,6 +121,27 @@ public sealed class EndToEndTests : IDisposable
         Assert.Contains(a.Combat, e => e.AttackerId == aId && e.TargetId == mobId && e.Outcome != 0);
         Assert.Contains(a.Combat, e => e.AttackerId == bId && e.TargetId == mobId && e.Outcome != 0);
         Assert.Contains(a.Deaths.Single(d => d.EntityId == mobId).KillerId, new[] { aId, bId });
+    }
+
+    [Fact]
+    public void The_profession_chosen_at_login_survives_the_sealed_ticket()
+    {
+        var login = _logins.TryLogin(new LoginRequest("healer", "pw", "Medic", "Nightborn"))!;
+        var client = new TestClient();
+        using var conn = new GameConnection(client);
+        conn.Connect("127.0.0.1", login.GatewayPort, login);
+        Pump(conn, () => client.Sheet is not null, "character sheet");
+        Assert.Equal((byte)Meridian.Core.Characters.Profession.Medic, client.Sheet!.Value.Profession);
+        Assert.Equal((byte)Meridian.Core.Characters.Origin.Nightborn, client.Sheet.Value.Origin);
+    }
+
+    [Fact]
+    public void Unplayable_professions_are_refused_at_login()
+    {
+        Assert.Null(_logins.TryLogin(new LoginRequest("x1x", "pw", "Sentinel")));   // not in content yet
+        Assert.Null(_logins.TryLogin(new LoginRequest("x2x", "pw", "Wizard")));
+        Assert.Null(_logins.TryLogin(new LoginRequest("x3x", "pw", null, "Heavyworlder")));
+        Assert.NotNull(_logins.TryLogin(new LoginRequest("x4x", "pw", "warden", "nightborn"))); // case-insensitive
     }
 
     [Fact]
@@ -283,5 +305,17 @@ public sealed class EndToEndTests : IDisposable
         public void OnRespawned(GameConnection context, in Respawned message)
         {
         }
+
+        public CharacterSheet? Sheet { get; private set; }
+
+        public List<XpGained> Experience { get; } = [];
+
+        public List<string> Notices { get; } = [];
+
+        public void OnCharacterSheet(GameConnection context, in CharacterSheet message) => Sheet = message;
+
+        public void OnXpGained(GameConnection context, in XpGained message) => Experience.Add(message);
+
+        public void OnNotice(GameConnection context, in Notice message) => Notices.Add(message.Text ?? "");
     }
 }

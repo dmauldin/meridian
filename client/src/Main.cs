@@ -23,7 +23,7 @@ public partial class Main : Node
         if (_autopilot is not null)
         {
             GD.Print($"autopilot: logging in as {_autopilot.Username} via {_autopilot.AuthUrl}");
-            StartLogin(_autopilot.AuthUrl, _autopilot.Username, _autopilot.Password);
+            StartLogin(_autopilot.AuthUrl, _autopilot.Username, _autopilot.Password, _autopilot.Profession, "Baseline");
             return;
         }
         ShowLogin(null);
@@ -72,7 +72,7 @@ public partial class Main : Node
         }
     }
 
-    private async void StartLogin(string authUrl, string username, string password)
+    private async void StartLogin(string authUrl, string username, string password, string profession, string origin)
     {
         _login?.ShowStatus("Logging in...", isError: false);
         try
@@ -80,7 +80,7 @@ public partial class Main : Node
             _http?.Dispose();
             _http = new System.Net.Http.HttpClient { BaseAddress = new Uri(authUrl.EndsWith('/') ? authUrl : authUrl + "/"), Timeout = TimeSpan.FromSeconds(10) };
             // Godot's synchronization context resumes this on the main thread.
-            _pendingSession = await GameSession.StartAsync(_http, username, password);
+            _pendingSession = await GameSession.StartAsync(_http, new Meridian.Net.Client.LoginRequest(username, password, profession, origin));
             _login?.ShowStatus("Connecting to the zone...", isError: false);
         }
         catch (Exception e) when (e is System.Net.Http.HttpRequestException or TaskCanceledException or UriFormatException)
