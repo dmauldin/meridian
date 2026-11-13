@@ -124,9 +124,9 @@ public sealed class CharacterBuild
     }
 
     /// <summary>
-    /// Rebuilds a character from saved progression: a fresh build for the profession and origin,
-    /// then the stored level, experience, unspent points and trained base values. Used by the
-    /// client to mirror its character sheet and (M2.3) by persistence to load characters.
+    /// Rebuilds a character from absolute base values, as the client's character sheet carries
+    /// them: a fresh build for the profession and origin, then the level, experience, unspent
+    /// points and trainable base values given. Non-trainable stats in the input are ignored.
     /// </summary>
     public static CharacterBuild Restore(
         ContentPack pack,
@@ -150,6 +150,52 @@ public sealed class CharacterBuild
         build.Xp = Math.Max(0, xp);
         build.UnspentPoints = Math.Max(0, unspentPoints);
         return build;
+    }
+
+    /// <summary>
+    /// Rebuilds a stored character: a fresh build, then each trainable stat raised by the points
+    /// trained into it. Storing raises rather than absolute values means a content change to
+    /// starting values carries through to existing characters. Raises for stats that are no
+    /// longer trainable, or that are not positive, are dropped rather than trusted.
+    /// </summary>
+    public static CharacterBuild Load(
+        ContentPack pack,
+        Profession profession,
+        Origin origin,
+        int level,
+        long xp,
+        int unspentPoints,
+        IEnumerable<KeyValuePair<Stat, int>> trained)
+    {
+        ArgumentNullException.ThrowIfNull(trained);
+        var build = Create(pack, profession, origin);
+        build.Character.Stats.SetBase(Stat.Level, Math.Clamp(level, 1, build.Rules.MaxLevel));
+        foreach (var (stat, raise) in trained)
+        {
+            if (Skills.IsTrainable(stat) && raise > 0)
+            {
+                build.Character.Stats.SetBase(stat, build.StartingValue(stat) + raise);
+            }
+        }
+        build.Xp = Math.Max(0, xp);
+        build.UnspentPoints = Math.Max(0, unspentPoints);
+        return build;
+    }
+
+    /// <summary>How far each trained stat has been raised above its starting value, in stat order.</summary>
+    public IReadOnlyList<KeyValuePair<Stat, int>> Trained()
+    {
+        var trained = new List<KeyValuePair<Stat, int>>();
+        foreach (var stat in Skills.Trainable)
+        {
+            var raise = Character.Stats.GetBase(stat) - StartingValue(stat);
+            if (raise != 0)
+            {
+                trained.Add(new(stat, raise));
+            }
+        }
+        trained.Sort((a, b) => a.Key.CompareTo(b.Key));
+        return trained;
     }
 
     /// <summary>The value a stat started at; training caps are measured from here.</summary>
