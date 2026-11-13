@@ -6,5 +6,6 @@
     <ProjectReference Include="../Meridian.Core/Meridian.Core.csproj" />
     <ProjectReference Include="../Meridian.Content/Meridian.Content.csproj" />
     <ProjectReference Include="../Meridian.Net/Meridian.Net.csproj" />
+    <ProjectReference Include="../Meridian.Persistence/Meridian.Persistence.csproj" />
   </ItemGroup>
 </Project>
