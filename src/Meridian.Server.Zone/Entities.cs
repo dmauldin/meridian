@@ -2,6 +2,7 @@ using Meridian.Core.Characters;
 using Meridian.Core.Combat;
 using Meridian.Core.Content;
 using Meridian.Core.Items;
+using Meridian.Core.Protocols;
 using Meridian.Core.Stats;
 using Meridian.Core.World;
 using Meridian.Persistence;
@@ -84,15 +85,22 @@ public sealed class Player : Entity
     private WeaponProfile? _activeWeapon;
     private long _weaponRevision = -1;
 
-    public Player(uint entityId, ClientRef client, CharacterRecord record, CharacterBuild build, Outfit outfit, WeaponProfile unarmed)
+    public Player(uint entityId, ClientRef client, CharacterRecord record, CharacterBuild build, Outfit outfit, Lattice lattice, WeaponProfile unarmed)
         : base(entityId, EntityKind.Player, record.Name, build.Character, unarmed)
     {
         Client = client;
         Record = record;
         Build = build;
         Outfit = outfit;
+        Lattice = lattice;
         _unarmed = unarmed;
     }
+
+    /// <summary>Known Protocols, energy, and the Protocols running on this player.</summary>
+    public Lattice Lattice { get; }
+
+    /// <summary>The lattice revision last sent as <c>ProtocolState</c>; -1 forces a send.</summary>
+    internal long LastSentLatticeRevision { get; set; } = -1;
 
     /// <summary>Inventory and worn items.</summary>
     public Outfit Outfit { get; }
@@ -124,7 +132,7 @@ public sealed class Player : Entity
     public ulong CharacterId => Record.Id;
 
     /// <summary>What a save would capture; when it differs from <see cref="LastSavedKey"/> a checkpoint is due.</summary>
-    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health, Outfit.Revision);
+    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health, Outfit.Revision, Lattice.Revision);
 
     internal SaveKey LastSavedKey { get; set; }
 
@@ -153,9 +161,9 @@ public sealed class Player : Entity
 }
 
 /// <summary>What <c>SelfStatus</c> last told the player, to send only changes.</summary>
-internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health, long OutfitRevision);
+internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health, long OutfitRevision, long LatticeRevision);
 
-internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead, int RunSpeed);
+internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead, int RunSpeed, int Energy, int MaxEnergy);
 
 public enum MobState : byte
 {

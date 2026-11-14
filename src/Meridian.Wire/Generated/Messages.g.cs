@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0xBB65567F0F07D161UL;
+    public const ulong Hash = 0x0E8B959D7B62C539UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -303,6 +303,85 @@ public partial struct DiscardItem : IWireMessage<DiscardItem>
     {
         var value = default(DiscardItem);
         value.Position = reader.ReadU8();
+        return value;
+    }
+}
+
+public partial struct UploadProtocol : IWireMessage<UploadProtocol>
+{
+    public const ushort Id = 110;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<UploadProtocol>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<UploadProtocol>.Delivery => Delivery.ReliableOrdered;
+
+    public byte Position;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Position);
+    }
+
+    public static UploadProtocol Read(ref WireReader reader)
+    {
+        var value = default(UploadProtocol);
+        value.Position = reader.ReadU8();
+        return value;
+    }
+}
+
+public partial struct CastProtocol : IWireMessage<CastProtocol>
+{
+    public const ushort Id = 111;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<CastProtocol>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<CastProtocol>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ProtocolId;
+
+    public uint TargetId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ProtocolId);
+        writer.WriteVarU32(TargetId);
+    }
+
+    public static CastProtocol Read(ref WireReader reader)
+    {
+        var value = default(CastProtocol);
+        value.ProtocolId = reader.ReadU32();
+        value.TargetId = reader.ReadVarU32();
+        return value;
+    }
+}
+
+public partial struct CancelProtocol : IWireMessage<CancelProtocol>
+{
+    public const ushort Id = 112;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<CancelProtocol>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<CancelProtocol>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ProtocolId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ProtocolId);
+    }
+
+    public static CancelProtocol Read(ref WireReader reader)
+    {
+        var value = default(CancelProtocol);
+        value.ProtocolId = reader.ReadU32();
         return value;
     }
 }
@@ -609,6 +688,10 @@ public partial struct SelfStatus : IWireMessage<SelfStatus>
 
     public int RunSpeed;
 
+    public int Energy;
+
+    public int MaxEnergy;
+
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteI32(Health);
@@ -617,6 +700,8 @@ public partial struct SelfStatus : IWireMessage<SelfStatus>
         writer.WriteBool(Attacking);
         writer.WriteBool(Dead);
         writer.WriteI32(RunSpeed);
+        writer.WriteI32(Energy);
+        writer.WriteI32(MaxEnergy);
     }
 
     public static SelfStatus Read(ref WireReader reader)
@@ -628,6 +713,8 @@ public partial struct SelfStatus : IWireMessage<SelfStatus>
         value.Attacking = reader.ReadBool();
         value.Dead = reader.ReadBool();
         value.RunSpeed = reader.ReadI32();
+        value.Energy = reader.ReadI32();
+        value.MaxEnergy = reader.ReadI32();
         return value;
     }
 }
@@ -903,6 +990,84 @@ public partial struct InventoryState : IWireMessage<InventoryState>
     }
 }
 
+public partial struct RunningProtocol : IWireStruct<RunningProtocol>
+{
+    public uint ProtocolId;
+
+    public uint RemainingMs;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ProtocolId);
+        writer.WriteU32(RemainingMs);
+    }
+
+    public static RunningProtocol Read(ref WireReader reader)
+    {
+        var value = default(RunningProtocol);
+        value.ProtocolId = reader.ReadU32();
+        value.RemainingMs = reader.ReadU32();
+        return value;
+    }
+}
+
+public partial struct ProtocolState : IWireMessage<ProtocolState>
+{
+    public const ushort Id = 215;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<ProtocolState>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<ProtocolState>.Delivery => Delivery.ReliableOrdered;
+
+    public uint[]? Known;
+
+    public RunningProtocol[]? Running;
+
+    public int LatticeUsed;
+
+    public int LatticeCapacity;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        var knownItems = Known ?? [];
+        writer.WriteCount(knownItems.Length, 512);
+        foreach (var item in knownItems)
+        {
+            writer.WriteU32(item);
+        }
+        var runningItems = Running ?? [];
+        writer.WriteCount(runningItems.Length, 32);
+        foreach (var item in runningItems)
+        {
+            item.Write(ref writer);
+        }
+        writer.WriteI32(LatticeUsed);
+        writer.WriteI32(LatticeCapacity);
+    }
+
+    public static ProtocolState Read(ref WireReader reader)
+    {
+        var value = default(ProtocolState);
+        var knownCount = reader.ReadCount(512);
+        value.Known = new uint[knownCount];
+        for (var i = 0; i < knownCount; i++)
+        {
+            value.Known[i] = reader.ReadU32();
+        }
+        var runningCount = reader.ReadCount(32);
+        value.Running = new RunningProtocol[runningCount];
+        for (var i = 0; i < runningCount; i++)
+        {
+            value.Running[i] = RunningProtocol.Read(ref reader);
+        }
+        value.LatticeUsed = reader.ReadI32();
+        value.LatticeCapacity = reader.ReadI32();
+        return value;
+    }
+}
+
 public partial struct XpGained : IWireMessage<XpGained>
 {
     public const ushort Id = 212;
@@ -1140,6 +1305,12 @@ public interface IServerBoundHandler<in TContext>
     void OnUnequipItem(TContext context, in UnequipItem message);
 
     void OnDiscardItem(TContext context, in DiscardItem message);
+
+    void OnUploadProtocol(TContext context, in UploadProtocol message);
+
+    void OnCastProtocol(TContext context, in CastProtocol message);
+
+    void OnCancelProtocol(TContext context, in CancelProtocol message);
 }
 
 /// <summary>Receives ClientBound messages from <see cref="WireDispatch"/>.</summary>
@@ -1168,6 +1339,8 @@ public interface IClientBoundHandler<in TContext>
     void OnCharacterSheet(TContext context, in CharacterSheet message);
 
     void OnInventoryState(TContext context, in InventoryState message);
+
+    void OnProtocolState(TContext context, in ProtocolState message);
 
     void OnXpGained(TContext context, in XpGained message);
 
@@ -1272,6 +1445,27 @@ public static class WireDispatch
                 handler.OnDiscardItem(context, message);
                 return id;
             }
+            case UploadProtocol.Id:
+            {
+                var message = UploadProtocol.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnUploadProtocol(context, message);
+                return id;
+            }
+            case CastProtocol.Id:
+            {
+                var message = CastProtocol.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnCastProtocol(context, message);
+                return id;
+            }
+            case CancelProtocol.Id:
+            {
+                var message = CancelProtocol.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnCancelProtocol(context, message);
+                return id;
+            }
             default:
                 throw new WireFormatException($"Message id {id} is not a ServerBound message.");
         }
@@ -1367,6 +1561,13 @@ public static class WireDispatch
                 var message = InventoryState.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnInventoryState(context, message);
+                return id;
+            }
+            case ProtocolState.Id:
+            {
+                var message = ProtocolState.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnProtocolState(context, message);
                 return id;
             }
             case XpGained.Id:
