@@ -32,7 +32,8 @@ public sealed record ProfessionDef(
     IReadOnlyDictionary<Stat, CostTier> SkillTiers,
     IReadOnlyDictionary<Stat, int> StartingSkills,
     string StartingWeaponKey,
-    int StartingWeaponQl);
+    int StartingWeaponQl,
+    IReadOnlyList<string> StartingProtocols);
 
 /// <summary>An origin (breed): attributes, their prices, and bonus points.</summary>
 /// <param name="Attributes">Starting attribute values (replace the common ones).</param>

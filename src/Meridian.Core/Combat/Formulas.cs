@@ -34,11 +34,21 @@ public static class Formulas
     /// <summary>Critical hits deal this many percent of normal damage.</summary>
     public const int CriticalPercent = 200;
 
+    /// <summary>Lattice energy regenerated per second, in basis points of maximum energy (2%/s).</summary>
+    public const int EnergyRegenBpPerSecond = 200;
+
     /// <summary>
     /// Hit chance in basis points from attack skill vs. defence skill. Ratio-based so it behaves
     /// the same at level 1 (skills ~10) and level 200 (skills ~1500): equal skills give 66.67%,
     /// attack double the defence gives 80%.
     /// </summary>
+    /// <summary>
+    /// Energy regained per tick, in thousandths of a point (energy is tracked in thousandths so
+    /// small pools still regenerate at 20 Hz). Never negative.
+    /// </summary>
+    public static long EnergyRegenMilliPerTick(int maxEnergy, int tickMs) =>
+        Math.Max(0L, (long)maxEnergy * EnergyRegenBpPerSecond * tickMs / 10_000);
+
     public static int HitChance(int attackSkill, int defenceSkill)
     {
         long a = Math.Max(0, attackSkill) + 1;

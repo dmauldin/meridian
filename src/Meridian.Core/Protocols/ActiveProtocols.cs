@@ -55,10 +55,11 @@ public sealed class ActiveProtocols
     /// Applies <paramref name="def"/> to the target if line and capacity rules allow it.
     /// The caster's requirement is not checked here; see <see cref="ProtocolDef.CanCast"/>.
     /// </summary>
-    public ApplyResult TryApply(ProtocolDef def, long nowTick)
+    /// <param name="durationTicks">Overrides the definition's duration (restoring a saved buff's remaining time).</param>
+    public ApplyResult TryApply(ProtocolDef def, long nowTick, int? durationTicks = null)
     {
         ArgumentNullException.ThrowIfNull(def);
-        var expires = nowTick + def.DurationTicks;
+        var expires = nowTick + Math.Max(1, durationTicks ?? def.DurationTicks);
         _byLine.TryGetValue(def.Line, out var current);
 
         if (current is not null)

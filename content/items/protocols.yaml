@@ -1,0 +1,25 @@
+# Protocol items. Uploading one teaches its Protocol permanently and consumes the item; you
+# need the Protocol's cast requirements to upload it. They have no slot.
+- id: 6001
+  key: protocol.rifle_enhancement_1
+  name: "Protocol: Rifle Enhancement I"
+  protocol: buff.rifle_enhancement_1
+  ql: [1, 1]
+
+- id: 6002
+  key: protocol.rifle_enhancement_2
+  name: "Protocol: Rifle Enhancement II"
+  protocol: buff.rifle_enhancement_2
+  ql: [1, 1]
+
+- id: 6101
+  key: protocol.reflex_boost_1
+  name: "Protocol: Reflex Boost I"
+  protocol: buff.reflex_boost_1
+  ql: [1, 1]
+
+- id: 6201
+  key: protocol.intimidating_presence
+  name: "Protocol: Intimidating Presence"
+  protocol: buff.intimidating_presence
+  ql: [1, 1]
