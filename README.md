@@ -186,11 +186,38 @@ The zone sends a `CharacterSheet` (every stat's base and effective value) on joi
 whenever stats, XP or points change; `XpGained` and `Notice` (training refusals) are events.
 Profession and origin are chosen when the character is created and never change.
 
+## Items (M2)
+
+An item is a content template at a quality level (QL 1-300); requirements and bonuses
+interpolate between the template's QL anchors. The rules are `Outfit` in `Meridian.Core`
+(inventory plus worn equipment), shared by zone and client.
+
+- **Equipping swaps**: whatever the new item displaces (its slot, or both hands for a
+  two-hander) goes back to the inventory, starting at the position the new item came from.
+- **Twinking**: requirements count buffs and other items, never the item's own bonuses, and
+  never the bonuses of the item being replaced. An item whose requirement later fails stays
+  worn but goes inactive (no bonuses; an inactive weapon cannot be fired, so you fight with
+  fists) until it is met again. The zone re-checks worn items whenever stats change and tells
+  the player what turned inactive or active.
+- **Loot** rolls each of a mob's entries on its death (chance in basis points, QL = mob level
+  plus or minus a spread) and goes to the player with the most threat.
+- **Saving**: items are rows in `character_items` (inventory position or worn slot, template,
+  QL), written with the character in one transaction. A saved twinked item comes back worn but
+  inactive if its twink is gone.
+- **Messages**: `EquipItem`, `UnequipItem`, `DiscardItem` (intents); `InventoryState` (sent on
+  join and on any change). Until the inventory window (M2.5) use `/inv`, `/equip <#>`,
+  `/unequip <slot>`, `/discard <#>` in chat.
+- **Development**: with `MERIDIAN_DEV_COMMANDS=1` the zone accepts `/give <item key> <ql>`
+  (and warns at start). There is no permission model yet, so never on a public server.
+
 ## Known limits and next steps
 
 - **The Postgres store and Argon2id are not in yet**: their packages could not be restored on
   the build machine. The schema, migration runner and checks are done; the development file
   store stands in and is not meant for production.
+- **Items have no ids yet**: an item is identified by where it sits. Trading (M3) adds ids.
+- **Characters with no items at all get their kit on join**, so characters created before
+  items existed are not left unarmed. Discarding everything therefore brings the kit back.
 - **Login sessions live in the auth process's memory**, so restarting auth logs everyone out of
   character select (not out of the game). Fine for one auth instance.
 - **Placeholder art**: capsules and a glassy six-legged skitter built from primitives.
