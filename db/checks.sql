@@ -30,10 +30,17 @@ DO $$ BEGIN
   IF (SELECT version FROM characters WHERE name = 'Rook') <> 1 THEN RAISE EXCEPTION 'version should start at 1'; END IF;
 END $$;
 
+INSERT INTO character_items (character_id, location, position, template_id, ql)
+SELECT id, 2, 3, 1001, 1 FROM characters WHERE name = 'Rook';
+SELECT pg_temp.expect_error($q$INSERT INTO character_items SELECT id, 2, 3, 1002, 1 FROM characters WHERE name = 'Rook'$q$, '23505'); -- one item per slot
+SELECT pg_temp.expect_error($q$INSERT INTO character_items SELECT id, 3, 0, 1001, 1 FROM characters WHERE name = 'Rook'$q$, '23514');  -- location
+SELECT pg_temp.expect_error($q$INSERT INTO character_items SELECT id, 1, 0, 1001, 301 FROM characters WHERE name = 'Rook'$q$, '23514'); -- ql
+
 -- Deleting an account deletes its characters.
 DELETE FROM accounts WHERE username = 'Alice';
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM characters) THEN RAISE EXCEPTION 'characters should cascade'; END IF;
+  IF EXISTS (SELECT 1 FROM character_items) THEN RAISE EXCEPTION 'items should cascade'; END IF;
 END $$;
 ROLLBACK;
 

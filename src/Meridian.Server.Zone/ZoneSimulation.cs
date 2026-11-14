@@ -210,7 +210,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     {
         ArgumentNullException.ThrowIfNull(player);
         var health = player.Dead ? 0 : player.Health;
-        return player.Record.WithProgress(player.Build, new Placement(_zone.Key, player.Position, health));
+        return player.Record.WithProgress(player.Build, new Placement(_zone.Key, player.Position, health), player.Record.Items);
     }
 
     /// <summary>

@@ -19,6 +19,7 @@ public sealed record Placement(string Zone, Position Position, int Health);
 /// </summary>
 /// <param name="Trained">Points raised above starting value per trainable stat (see <c>CharacterBuild.Trained</c>).</param>
 /// <param name="Placement">Null until a zone first places the character.</param>
+/// <param name="Items">Everything carried and worn.</param>
 /// <param name="Version">Optimistic-concurrency version; a save must name the version it read.</param>
 public sealed record CharacterRecord(
     ulong Id,
@@ -31,7 +32,19 @@ public sealed record CharacterRecord(
     int UnspentPoints,
     IReadOnlyList<KeyValuePair<Stat, int>> Trained,
     Placement? Placement,
-    long Version);
+    long Version,
+    IReadOnlyList<StoredItem> Items);
+
+public enum ItemLocation : byte
+{
+    Inventory = 1,
+
+    /// <summary>Worn; the position is the <see cref="Meridian.Core.Items.EquipSlot"/> value.</summary>
+    Worn = 2,
+}
+
+/// <summary>One carried or worn item, as stored (a row of <c>character_items</c>).</summary>
+public readonly record struct StoredItem(ItemLocation Location, int Position, int TemplateId, int Ql);
 
 public enum CreateCharacterError
 {
