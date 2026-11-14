@@ -194,6 +194,13 @@ public partial class GameView : Node3D
                 case SystemNotice notice:
                     _hud.AddChat($"[color=#8af]{Escape(notice.Text)}[/color]");
                     break;
+                case ExperienceGained xp:
+                    FloatingText.Spawn(this, _selfView!.Position, $"+{xp.Amount} XP", new Color(0.7f, 0.6f, 1f));
+                    if (xp.LevelsGained > 0)
+                    {
+                        _hud.AddChat($"[color=#c9f][b]Level {xp.Level}![/b] New skill points to spend: /train <Stat> <points>[/color]");
+                    }
+                    break;
             }
         }
     }
@@ -233,6 +240,10 @@ public partial class GameView : Node3D
     {
         var status = World.Status;
         _hud.SetSelf(Session.CharacterName, status.Health, status.MaxHealth);
+        if (World.Build is { } build)
+        {
+            _hud.SetProgress(build.Level, build.Profession.Name, build.Xp, build.XpToNext, build.UnspentPoints);
+        }
         _hud.SetBanner(status.Dead ? "You are dead. Reclamation in progress..." : "");
 
         if (_target != 0 && World.Entities.TryGetValue(_target, out var target) && target.HasSamples)

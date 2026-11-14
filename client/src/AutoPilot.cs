@@ -6,10 +6,12 @@ namespace Meridian.Client;
 
 /// <summary>Command-line options for <see cref="AutoPilot"/>, after Godot's <c>--</c> separator.</summary>
 /// <remarks>
-/// <c>godot --headless --path client -- --autopilot --user Ann --pass dev --auth http://host:5080/ --timeout 120</c>
-/// Add <c>--screenshot shot.png</c> (with a real or virtual display) to save a frame 2 s into the fight.
+/// <c>godot --headless --path client -- --autopilot --user Ann --pass autopilot1 --auth http://host:5080/ --timeout 120</c>
+/// The account and its character are both named after <c>--user</c> and created on first run.
+/// Add <c>--screenshot shot.png</c> (with a real or virtual display) to save a frame 2 s into the fight,
+/// and <c>--profession Medic</c> to play another profession (default Operative).
 /// </remarks>
-public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath)
+public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession)
 {
     public static AutoPilotOptions? Parse(string[] args)
     {
@@ -26,9 +28,10 @@ public sealed record AutoPilotOptions(string AuthUrl, string Username, string Pa
         return new AutoPilotOptions(
             Arg("--auth", "http://127.0.0.1:5080/"),
             Arg("--user", $"Auto{System.Environment.ProcessId % 10_000}"),
-            Arg("--pass", "dev"),
+            Arg("--pass", "autopilot1"),
             double.Parse(Arg("--timeout", "120"), System.Globalization.CultureInfo.InvariantCulture),
-            Arg("--screenshot", "") is { Length: > 0 } shot ? shot : null);
+            Arg("--screenshot", "") is { Length: > 0 } shot ? shot : null,
+            Arg("--profession", "Operative"));
     }
 }
 

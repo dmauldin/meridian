@@ -23,7 +23,7 @@ public partial class Main : Node
         if (_autopilot is not null)
         {
             GD.Print($"autopilot: logging in as {_autopilot.Username} via {_autopilot.AuthUrl}");
-            StartLogin(_autopilot.AuthUrl, _autopilot.Username, _autopilot.Password);
+            StartAutopilot(_autopilot);
             return;
         }
         ShowLogin(null);
@@ -64,7 +64,7 @@ public partial class Main : Node
         _game?.QueueFree();
         _game = null;
         _login = new LoginScreen();
-        _login.LoginRequested += StartLogin;
+        _login.PlayReady += StartPlay;
         AddChild(_login);
         if (message is not null)
         {
@@ -72,18 +72,25 @@ public partial class Main : Node
         }
     }
 
-    private async void StartLogin(string authUrl, string username, string password)
+    private void StartPlay(Meridian.Net.Client.PlayResponse play, string characterName)
     {
-        _login?.ShowStatus("Logging in...", isError: false);
+        _login?.ShowStatus("Connecting to the zone...", isError: false);
+        _pendingSession = GameSession.Start(play, characterName);
+    }
+
+    /// <summary>Headless: account and character share the autopilot's name and are created on first run.</summary>
+    private async void StartAutopilot(AutoPilotOptions options)
+    {
         try
         {
             _http?.Dispose();
-            _http = new System.Net.Http.HttpClient { BaseAddress = new Uri(authUrl.EndsWith('/') ? authUrl : authUrl + "/"), Timeout = TimeSpan.FromSeconds(10) };
+            var url = options.AuthUrl.EndsWith('/') ? options.AuthUrl : options.AuthUrl + "/";
+            _http = new System.Net.Http.HttpClient { BaseAddress = new Uri(url), Timeout = TimeSpan.FromSeconds(10) };
             // Godot's synchronization context resumes this on the main thread.
-            _pendingSession = await GameSession.StartAsync(_http, username, password);
-            _login?.ShowStatus("Connecting to the zone...", isError: false);
+            _pendingSession = await GameSession.QuickStartAsync(
+                _http, new Meridian.Net.Client.Credentials(options.Username, options.Password), options.Username, options.Profession, "baseline");
         }
-        catch (Exception e) when (e is System.Net.Http.HttpRequestException or TaskCanceledException or UriFormatException)
+        catch (Exception e) when (e is Meridian.Net.Client.AuthException or System.Net.Http.HttpRequestException or TaskCanceledException or UriFormatException)
         {
             Fail($"Login failed: {e.Message}");
         }

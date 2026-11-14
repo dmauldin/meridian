@@ -136,6 +136,15 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
     }
 
+    public void OnDropClient(NetPeer context, in DropClient message)
+    {
+        if (_byConnection.TryGetValue(message.ConnectionId, out var session))
+        {
+            _log($"zone dropped connection {message.ConnectionId}: {message.Reason}");
+            Kick(session, message.Reason ?? "Disconnected by the server.");
+        }
+    }
+
     public void OnToClient(NetPeer context, in ToClient message)
     {
         if (!_byConnection.TryGetValue(message.ConnectionId, out var session) || message.Payload is null)
@@ -217,7 +226,13 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         var session = new ClientSession(_nextConnectionId++, peer, ticket, _options.MaxPacketsPerSecond);
         _byPeer[peer.Id] = session;
         _byConnection[session.ConnectionId] = session;
-        SendToZone(new PlayerJoin { ConnectionId = session.ConnectionId, AccountId = ticket.AccountId, Name = ticket.CharacterName });
+        SendToZone(new PlayerJoin
+        {
+            ConnectionId = session.ConnectionId,
+            AccountId = ticket.AccountId,
+            Name = ticket.CharacterName,
+            CharacterId = ticket.CharacterId,
+        });
     }
 
     private void OnClientPacket(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
@@ -326,6 +341,10 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
 
         public void OnSnapshotAck(int context, in SnapshotAck message)
+        {
+        }
+
+        public void OnTrainSkill(int context, in TrainSkill message)
         {
         }
     }

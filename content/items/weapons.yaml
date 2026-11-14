@@ -34,3 +34,38 @@
     range_m: 32
     min_damage: { 1: 14, 300: 260 }
     max_damage: { 1: 30, 300: 700 }
+
+- id: 1003
+  key: blunt.shock_maul
+  name: Shock Maul
+  slot: TwoHand
+  ql: [1, 300]
+  requirements:
+    Blunt: { 1: 4, 300: 1150 }
+    Strength: { 1: 10, 300: 500 }
+  weapon:
+    attack_skill: Blunt
+    initiative: MeleeInit
+    defence: EvadeClose
+    damage_type: Melee
+    attack_time_ms: 1800
+    range_m: 3
+    min_damage: { 1: 12, 300: 260 }
+    max_damage: { 1: 26, 300: 640 }
+
+- id: 1004
+  key: pistol.combine_sidearm
+  name: Combine Sidearm
+  slot: MainHand
+  ql: [1, 300]
+  requirements:
+    Pistol: { 1: 4, 300: 1150 }
+  weapon:
+    attack_skill: Pistol
+    initiative: RangedInit
+    defence: EvadeRanged
+    damage_type: Projectile
+    attack_time_ms: 1100
+    range_m: 18
+    min_damage: { 1: 5, 300: 120 }
+    max_damage: { 1: 13, 300: 340 }

@@ -124,6 +124,125 @@
       }
     },
     {
+      "id": 1003,
+      "key": "blunt.shock_maul",
+      "name": "Shock Maul",
+      "slot": "TwoHand",
+      "minQl": 1,
+      "maxQl": 300,
+      "requirements": [
+        {
+          "stat": "Blunt",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 4
+            },
+            {
+              "ql": 300,
+              "value": 1150
+            }
+          ]
+        },
+        {
+          "stat": "Strength",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 10
+            },
+            {
+              "ql": 300,
+              "value": 500
+            }
+          ]
+        }
+      ],
+      "professions": [],
+      "effects": [],
+      "weapon": {
+        "attackSkill": "Blunt",
+        "initiative": "MeleeInit",
+        "defence": "EvadeClose",
+        "damageType": "Melee",
+        "attackTimeMs": 1800,
+        "rangeMm": 3000,
+        "minDamage": [
+          {
+            "ql": 1,
+            "value": 12
+          },
+          {
+            "ql": 300,
+            "value": 260
+          }
+        ],
+        "maxDamage": [
+          {
+            "ql": 1,
+            "value": 26
+          },
+          {
+            "ql": 300,
+            "value": 640
+          }
+        ]
+      }
+    },
+    {
+      "id": 1004,
+      "key": "pistol.combine_sidearm",
+      "name": "Combine Sidearm",
+      "slot": "MainHand",
+      "minQl": 1,
+      "maxQl": 300,
+      "requirements": [
+        {
+          "stat": "Pistol",
+          "curve": [
+            {
+              "ql": 1,
+              "value": 4
+            },
+            {
+              "ql": 300,
+              "value": 1150
+            }
+          ]
+        }
+      ],
+      "professions": [],
+      "effects": [],
+      "weapon": {
+        "attackSkill": "Pistol",
+        "initiative": "RangedInit",
+        "defence": "EvadeRanged",
+        "damageType": "Projectile",
+        "attackTimeMs": 1100,
+        "rangeMm": 18000,
+        "minDamage": [
+          {
+            "ql": 1,
+            "value": 5
+          },
+          {
+            "ql": 300,
+            "value": 120
+          }
+        ],
+        "maxDamage": [
+          {
+            "ql": 1,
+            "value": 13
+          },
+          {
+            "ql": 300,
+            "value": 340
+          }
+        ]
+      }
+    },
+    {
       "id": 2001,
       "key": "armor.marksman_gloves",
       "name": "Marksman Gloves",
@@ -375,7 +494,8 @@
       "aggroRadiusMm": 8000,
       "leashMm": 40000,
       "speedMmPerSecond": 4000,
-      "respawnMs": 10000
+      "respawnMs": 10000,
+      "xp": 120
     }
   ],
   "zones": [
@@ -401,6 +521,175 @@
       ]
     }
   ],
+  "professions": [
+    {
+      "id": 1,
+      "key": "warden",
+      "name": "Warden",
+      "groupTiers": {
+        "Body": "Cheap",
+        "Defence": "Cheap",
+        "Lattice": "Expensive",
+        "Melee": "Cheap",
+        "Ranged": "Expensive",
+        "Tech": "Expensive"
+      },
+      "skillTiers": {
+        "MindCraft": "Normal"
+      },
+      "startingSkills": {
+        "Blunt": 25,
+        "BodyDevelopment": 15,
+        "MindCraft": 5,
+        "Parry": 10
+      },
+      "startingWeapon": "blunt.shock_maul",
+      "startingWeaponQl": 1
+    },
+    {
+      "id": 2,
+      "key": "medic",
+      "name": "Medic",
+      "groupTiers": {
+        "Lattice": "Expensive",
+        "Melee": "Expensive",
+        "Tech": "Cheap"
+      },
+      "skillTiers": {
+        "BioWeaving": "Cheap"
+      },
+      "startingSkills": {
+        "BioWeaving": 25,
+        "FirstAid": 15,
+        "Treatment": 10
+      },
+      "startingWeapon": "rifle.combine_carbine",
+      "startingWeaponQl": 1
+    },
+    {
+      "id": 7,
+      "key": "operative",
+      "name": "Operative",
+      "groupTiers": {
+        "Initiative": "Cheap",
+        "Melee": "Expensive",
+        "Ranged": "Cheap",
+        "Tech": "Expensive"
+      },
+      "skillTiers": {
+        "HeavyWeapons": "Expensive",
+        "KineticFlux": "Cheap"
+      },
+      "startingSkills": {
+        "AimedShot": 5,
+        "KineticFlux": 20,
+        "Rifle": 10
+      },
+      "startingWeapon": "rifle.combine_carbine",
+      "startingWeaponQl": 1
+    },
+    {
+      "id": 13,
+      "key": "overload",
+      "name": "Overload",
+      "groupTiers": {
+        "Body": "Expensive",
+        "Lattice": "Cheap",
+        "Melee": "Expensive",
+        "Ranged": "Expensive"
+      },
+      "skillTiers": {
+        "Pistol": "Normal",
+        "ProtocolInit": "Cheap"
+      },
+      "startingSkills": {
+        "KineticFlux": 10,
+        "MatterShaping": 25,
+        "Pistol": 15
+      },
+      "startingWeapon": "pistol.combine_sidearm",
+      "startingWeaponQl": 1
+    }
+  ],
+  "origins": [
+    {
+      "id": 1,
+      "key": "baseline",
+      "name": "Baseline",
+      "attributes": {
+        "Agility": 20,
+        "Intellect": 20,
+        "Psyche": 20,
+        "Sense": 20,
+        "Stamina": 20,
+        "Strength": 20
+      },
+      "attributeTiers": {},
+      "bonusPointsPerLevel": 1
+    },
+    {
+      "id": 4,
+      "key": "nightborn",
+      "name": "Nightborn",
+      "attributes": {
+        "Agility": 20,
+        "Intellect": 26,
+        "Psyche": 26,
+        "Sense": 20,
+        "Stamina": 18,
+        "Strength": 14
+      },
+      "attributeTiers": {
+        "Intellect": "Cheap",
+        "Psyche": "Cheap",
+        "Stamina": "Expensive",
+        "Strength": "Expensive"
+      },
+      "bonusPointsPerLevel": 0
+    }
+  ],
+  "progression": {
+    "maxLevel": 30,
+    "xpToNext": [
+      {
+        "ql": 1,
+        "value": 300
+      },
+      {
+        "ql": 10,
+        "value": 2500
+      },
+      {
+        "ql": 30,
+        "value": 18000
+      }
+    ],
+    "pointsPerLevel": [
+      {
+        "ql": 2,
+        "value": 40
+      },
+      {
+        "ql": 30,
+        "value": 90
+      }
+    ],
+    "startingPoints": 60,
+    "tiers": {
+      "Cheap": {
+        "costPerPoint": 1,
+        "capPerLevel": 8
+      },
+      "Expensive": {
+        "costPerPoint": 4,
+        "capPerLevel": 4
+      },
+      "Normal": {
+        "costPerPoint": 2,
+        "capPerLevel": 6
+      }
+    }
+  },
   "newCharacter": {
     "stats": {
       "BodyDevelopment": 10,
@@ -408,13 +697,12 @@
       "EvadeRanged": 20,
       "Level": 1,
       "MeleeAC": 10,
+      "MeleeInit": 10,
+      "Pistol": 10,
       "ProjectileAC": 10,
       "RangedInit": 10,
-      "Rifle": 30,
-      "RunSpeed": 5000,
-      "Stamina": 20
-    },
-    "startingWeapon": "rifle.combine_carbine",
-    "startingWeaponQl": 1
+      "Rifle": 20,
+      "RunSpeed": 5000
+    }
   }
 }

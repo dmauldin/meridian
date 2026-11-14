@@ -7,10 +7,11 @@ namespace Meridian.Net;
 /// <summary>What the auth service vouches for. Opaque to the client.</summary>
 /// <param name="TicketId">Random id; the gateway accepts each ticket once.</param>
 /// <param name="AccountId">The authenticated account.</param>
-/// <param name="CharacterName">Display name for M0 (characters arrive with persistence).</param>
+/// <param name="CharacterName">The character's name (also shown to other players).</param>
 /// <param name="SessionKey">32-byte key the client also received over TLS.</param>
 /// <param name="ExpiresAt">Unix seconds after which the gateway refuses the ticket.</param>
-public sealed record LoginTicket(ulong TicketId, ulong AccountId, string CharacterName, byte[] SessionKey, long ExpiresAt);
+/// <param name="CharacterId">The stored character this session plays; auth checked it belongs to the account.</param>
+public sealed record LoginTicket(ulong TicketId, ulong AccountId, string CharacterName, byte[] SessionKey, long ExpiresAt, ulong CharacterId);
 
 /// <summary>
 /// Seals tickets with a key shared only by auth and gateway (ChaCha20-Poly1305, random nonce).
@@ -22,6 +23,10 @@ public sealed class TicketSealer : IDisposable
     private const int NonceBytes = 12;
     private const int TagBytes = 16;
     private const int MaxNameBytes = 32;
+
+    /// <summary>ticket id, account, expiry, character (8 each), name length (1).</summary>
+    private const int HeaderBytes = 8 + 8 + 8 + 8 + 1;
+    private const int NameLengthAt = 32;
 
     private readonly ChaCha20Poly1305 _aead;
 
@@ -43,14 +48,15 @@ public sealed class TicketSealer : IDisposable
             throw new ArgumentException("Ticket fields out of range.", nameof(ticket));
         }
 
-        var plain = new byte[8 + 8 + 8 + 1 + name.Length + SessionCipher.KeyBytes];
+        var plain = new byte[HeaderBytes + name.Length + SessionCipher.KeyBytes];
         var p = plain.AsSpan();
         BinaryPrimitives.WriteUInt64LittleEndian(p, ticket.TicketId);
         BinaryPrimitives.WriteUInt64LittleEndian(p[8..], ticket.AccountId);
         BinaryPrimitives.WriteInt64LittleEndian(p[16..], ticket.ExpiresAt);
-        p[24] = (byte)name.Length;
-        name.CopyTo(p[25..]);
-        ticket.SessionKey.CopyTo(p[(25 + name.Length)..]);
+        BinaryPrimitives.WriteUInt64LittleEndian(p[24..], ticket.CharacterId);
+        p[NameLengthAt] = (byte)name.Length;
+        name.CopyTo(p[HeaderBytes..]);
+        ticket.SessionKey.CopyTo(p[(HeaderBytes + name.Length)..]);
 
         var sealedTicket = new byte[NonceBytes + plain.Length + TagBytes];
         var s = sealedTicket.AsSpan();
@@ -64,7 +70,7 @@ public sealed class TicketSealer : IDisposable
     public LoginTicket? TryOpen(ReadOnlySpan<byte> sealedTicket)
     {
         var length = sealedTicket.Length - NonceBytes - TagBytes;
-        if (length < 25 + SessionCipher.KeyBytes)
+        if (length < HeaderBytes + SessionCipher.KeyBytes)
         {
             return null;
         }
@@ -79,17 +85,18 @@ public sealed class TicketSealer : IDisposable
         }
 
         var p = plain.AsSpan();
-        int nameLength = p[24];
-        if (25 + nameLength + SessionCipher.KeyBytes != length)
+        int nameLength = p[NameLengthAt];
+        if (HeaderBytes + nameLength + SessionCipher.KeyBytes != length)
         {
             return null;
         }
         var ticket = new LoginTicket(
             BinaryPrimitives.ReadUInt64LittleEndian(p),
             BinaryPrimitives.ReadUInt64LittleEndian(p[8..]),
-            Encoding.UTF8.GetString(p.Slice(25, nameLength)),
-            p.Slice(25 + nameLength, SessionCipher.KeyBytes).ToArray(),
-            BinaryPrimitives.ReadInt64LittleEndian(p[16..]));
+            Encoding.UTF8.GetString(p.Slice(HeaderBytes, nameLength)),
+            p.Slice(HeaderBytes + nameLength, SessionCipher.KeyBytes).ToArray(),
+            BinaryPrimitives.ReadInt64LittleEndian(p[16..]),
+            BinaryPrimitives.ReadUInt64LittleEndian(p[24..]));
         CryptographicOperations.ZeroMemory(plain);
         return ticket;
     }

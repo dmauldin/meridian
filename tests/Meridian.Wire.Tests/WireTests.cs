@@ -152,6 +152,8 @@ public class HostileInputTests
         public void OnSetAttack(int context, in SetAttack message) => Calls.Add($"attack {message.Enabled}");
 
         public void OnSnapshotAck(int context, in SnapshotAck message) => Calls.Add($"ack {message.Tick}");
+
+        public void OnTrainSkill(int context, in TrainSkill message) => Calls.Add($"train {message.Stat} {message.Points}");
     }
 
     [Fact]

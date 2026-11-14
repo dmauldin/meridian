@@ -74,10 +74,29 @@ public static class Compiler
         var newCharacterFile = Path.Combine(contentDirectory, "new_character.yaml");
         if (Load<NewCharacterYaml>(newCharacterFile, errors) is { } nc)
         {
-            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal), nc.StartingWeapon.Item, nc.StartingWeapon.Ql);
+            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal));
         }
 
-        if (errors.Count > 0 || newCharacter is null)
+        var professions = new List<ProfessionDto>();
+        var professionsFile = Path.Combine(contentDirectory, "professions.yaml");
+        foreach (var p in Load<List<ProfessionYaml>>(professionsFile, errors) ?? [])
+        {
+            Guard(errors, professionsFile, p.Profession, () => professions.Add(Checked(Profession(p), d => ContentPacks.ToModel(d))));
+        }
+        var origins = new List<OriginDto>();
+        var originsFile = Path.Combine(contentDirectory, "origins.yaml");
+        foreach (var o in Load<List<OriginYaml>>(originsFile, errors) ?? [])
+        {
+            Guard(errors, originsFile, o.Origin, () => origins.Add(Checked(OriginOf(o), d => ContentPacks.ToModel(d))));
+        }
+        ProgressionDto? progression = null;
+        var progressionFile = Path.Combine(contentDirectory, "progression.yaml");
+        if (Load<ProgressionYaml>(progressionFile, errors) is { } py)
+        {
+            Guard(errors, progressionFile, "progression", () => progression = Checked(Progression(py), d => ContentPacks.ToModel(d)));
+        }
+
+        if (errors.Count > 0 || newCharacter is null || progression is null)
         {
             return new CompileResult(null, errors);
         }
@@ -89,6 +108,9 @@ public static class Compiler
             [.. protocols.OrderBy(p => p.Id)],
             [.. mobs.OrderBy(m => m.Id)],
             [.. zones.OrderBy(z => z.Id)],
+            [.. professions.OrderBy(p => p.Id)],
+            [.. origins.OrderBy(o => o.Id)],
+            progression,
             newCharacter);
 
         // Validate through the same path the server uses to load, then emit canonical JSON.
@@ -155,7 +177,58 @@ public static class Compiler
             y.Id, y.Key, y.Name, y.Level, new SortedDictionary<string, int>(y.Stats, StringComparer.Ordinal),
             new AttackDto(a.Name, a.AttackSkill, a.Initiative, a.Defence, a.DamageType, Positive(a.AttackTimeMs, "attack_time_ms"),
                 Mm(a.RangeMetres, "range_m"), a.MinDamage, a.MaxDamage),
-            Mm(y.AggroMetres, "aggro_m", allowZero: true), Mm(y.LeashMetres, "leash_m"), Mm(y.SpeedMetresPerSecond, "speed_m_s"), Ms(y.RespawnSeconds, "respawn_s"));
+            Mm(y.AggroMetres, "aggro_m", allowZero: true), Mm(y.LeashMetres, "leash_m"), Mm(y.SpeedMetresPerSecond, "speed_m_s"), Ms(y.RespawnSeconds, "respawn_s"),
+            NonNegative(y.Xp, "xp"));
+    }
+
+    private static ProfessionDto Profession(ProfessionYaml y)
+    {
+        var id = (int)ContentPacks.Parse<Meridian.Core.Characters.Profession>(y.Profession, "profession");
+        Require(y.StartingWeapon.Ql is >= QlCurve.MinQl and <= QlCurve.MaxQl, "starting_weapon ql is out of range");
+        return new ProfessionDto(
+            id, y.Profession.ToLowerInvariant(), y.Name,
+            Tiers(y.GroupCosts), Tiers(y.SkillCosts),
+            new SortedDictionary<string, int>(y.StartingSkills, StringComparer.Ordinal),
+            y.StartingWeapon.Item, y.StartingWeapon.Ql);
+    }
+
+    private static OriginDto OriginOf(OriginYaml y)
+    {
+        var id = (int)ContentPacks.Parse<Meridian.Core.Characters.Origin>(y.Origin, "origin");
+        Require(y.BonusPointsPerLevel >= 0, "bonus_points_per_level cannot be negative");
+        return new OriginDto(
+            id, y.Origin.ToLowerInvariant(), y.Name,
+            new SortedDictionary<string, int>(y.Attributes, StringComparer.Ordinal),
+            Tiers(y.AttributeCosts), y.BonusPointsPerLevel);
+    }
+
+    private static ProgressionDto Progression(ProgressionYaml y)
+    {
+        Require(y.StartingPoints >= 0, "starting_points cannot be negative");
+        return new ProgressionDto(
+            y.MaxLevel, Anchors(y.XpToNext), Anchors(y.PointsPerLevel), y.StartingPoints,
+            new SortedDictionary<string, TierRuleDto>(
+                y.Tiers.ToDictionary(kv => TierName(kv.Key), kv => new TierRuleDto(kv.Value.CostPerPoint, kv.Value.CapPerLevel)),
+                StringComparer.Ordinal));
+    }
+
+    /// <summary>YAML writes tiers in lower case (cheap); the pack uses the enum names (Cheap).</summary>
+    private static SortedDictionary<string, string> Tiers(Dictionary<string, string> source) =>
+        new(source.ToDictionary(kv => kv.Key, kv => TierName(kv.Value)), StringComparer.Ordinal);
+
+    private static string TierName(string yaml) => yaml switch
+    {
+        "cheap" => "Cheap",
+        "normal" => "Normal",
+        "expensive" => "Expensive",
+        "locked" => "Locked",
+        _ => throw new InvalidDataException($"cost tier must be cheap, normal, expensive or locked, not '{yaml}'"),
+    };
+
+    private static int NonNegative(int value, string field)
+    {
+        Require(value >= 0, $"{field} cannot be negative");
+        return value;
     }
 
     private static ZoneDto Zone(ZoneYaml y)

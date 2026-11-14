@@ -31,7 +31,7 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     private uint _target;
     private bool _attacking;
 
-    public Bot(int index, LoginResponse login, string host, int port, bool hunt)
+    public Bot(int index, PlayResponse login, string host, int port, bool hunt)
     {
         Index = index;
         _hunt = hunt;
@@ -61,6 +61,10 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     public long Kills { get; private set; }
 
     public long Deaths { get; private set; }
+
+    public int Level { get; private set; }
+
+    public long Xp { get; private set; }
 
     public List<int> RttSamplesMs { get; } = [];
 
@@ -234,6 +238,14 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
         RttSamplesMs.Add((int)(ElapsedMs(Stopwatch.GetTimestamp()) - message.ClientTimeMs));
 
     public void OnDisconnecting(GameConnection context, in Disconnecting message)
+    {
+    }
+
+    public void OnCharacterSheet(GameConnection context, in CharacterSheet message) => Level = message.Level;
+
+    public void OnXpGained(GameConnection context, in XpGained message) => Xp += message.Amount;
+
+    public void OnNotice(GameConnection context, in Notice message)
     {
     }
 

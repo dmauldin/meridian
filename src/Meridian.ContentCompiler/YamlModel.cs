@@ -144,6 +144,8 @@ internal sealed class MobYaml
 
     [YamlMember(Alias = "respawn_s")]
     public double RespawnSeconds { get; set; }
+
+    public int Xp { get; set; }
 }
 
 internal sealed class BoundsYaml
@@ -208,6 +210,52 @@ internal sealed class StartingWeaponYaml
 internal sealed class NewCharacterYaml
 {
     public Dictionary<string, int> Stats { get; set; } = [];
+}
+
+internal sealed class ProfessionYaml
+{
+    public string Profession { get; set; } = "";
+
+    public string Name { get; set; } = "";
 
     public StartingWeaponYaml StartingWeapon { get; set; } = new();
+
+    public Dictionary<string, string> GroupCosts { get; set; } = [];
+
+    public Dictionary<string, string> SkillCosts { get; set; } = [];
+
+    public Dictionary<string, int> StartingSkills { get; set; } = [];
+}
+
+internal sealed class OriginYaml
+{
+    public string Origin { get; set; } = "";
+
+    public string Name { get; set; } = "";
+
+    public int BonusPointsPerLevel { get; set; }
+
+    public Dictionary<string, int> Attributes { get; set; } = [];
+
+    public Dictionary<string, string> AttributeCosts { get; set; } = [];
+}
+
+internal sealed class TierYaml
+{
+    public int CostPerPoint { get; set; }
+
+    public int CapPerLevel { get; set; }
+}
+
+internal sealed class ProgressionYaml
+{
+    public int MaxLevel { get; set; }
+
+    public int StartingPoints { get; set; }
+
+    public Dictionary<int, int> XpToNext { get; set; } = [];
+
+    public Dictionary<int, int> PointsPerLevel { get; set; } = [];
+
+    public Dictionary<string, TierYaml> Tiers { get; set; } = [];
 }

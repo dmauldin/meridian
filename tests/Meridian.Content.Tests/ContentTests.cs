@@ -142,7 +142,13 @@ public class ValidationTests : IDisposable
     [InlineData("mobs/creatures.yaml", "aggro_m: 8", "aggro_m: 80", "aggro_m cannot exceed leash_m")]
     [InlineData("zones/glasswind_flats.yaml", "mob: mob.glasswind_skitter", "mob: mob.glasswind_skiter", "unknown mob")]
     [InlineData("zones/glasswind_flats.yaml", "outer: 120", "outer: 2500", "outside the zone bounds")]
-    [InlineData("new_character.yaml", "item: rifle.combine_carbine", "item: armor.marksman_gloves", "is not a weapon")]
+    [InlineData("professions.yaml", "item: blunt.shock_maul", "item: armor.marksman_gloves", "is not a weapon")]
+    [InlineData("professions.yaml", "starting_skills: { BodyDevelopment: 15", "starting_skills: { Strength: 5, BodyDevelopment: 15", "not a profession skill")]
+    [InlineData("professions.yaml", "group_costs: { Body: cheap", "group_costs: { Body: chep", "cost tier must be")]
+    [InlineData("professions.yaml", "profession: Medic", "profession: Healer", "not a valid Profession")]
+    [InlineData("origins.yaml", "attribute_costs: { Intellect: cheap", "attribute_costs: { Rifle: cheap, Intellect: cheap", "is not an attribute")]
+    [InlineData("progression.yaml", "max_level: 30", "max_level: 900", "max_level must be")]
+    [InlineData("progression.yaml", "expensive: { cost_per_point: 4", "expensive: { cost_per_point: 0", "positive cost and cap")]
     public void Each_rule_catches_its_mistake(string file, string find, string replace, string expected)
     {
         var errors = CompileWith(file, find, replace);

@@ -30,7 +30,10 @@ src/
   Meridian.Wire.Gen/        The schema compiler.
   Meridian.Net/             Session encryption (ChaCha20-Poly1305), login tickets, LiteNetLib
                             channel mapping, and the client-side GameConnection.
-  Meridian.Server.Auth/     HTTP login -> session key + sealed single-use ticket.
+  Meridian.Persistence/     Accounts and characters: records, the store interface, password
+                            hashing, and the in-memory and development-file stores.
+  Meridian.Server.Auth/     HTTP accounts, character select/create, and play tickets
+                            (session key + sealed single-use ticket).
   Meridian.Server.Gateway/  Client-facing UDP edge: tickets, decryption, schema check,
                             rate limiting, relay to the zone.
   Meridian.Content/         The compiled content pack (embedded) and its JSON mapping.
@@ -44,7 +47,9 @@ content/                    Game data as YAML: items, Protocols, mobs, zones. Se
 client/                     Godot 4.7 (.NET) game client. Scripts in client/src draw
                             ClientState; scenes and UI are built in code for reviewable diffs.
 tests/                      xunit v3 on Microsoft.Testing.Platform.
+db/                         Postgres schema migrations and their checks. See db/README.md.
 scripts/m0-gate.sh          Builds, starts the stack, runs bots, checks the gate.
+scripts/db-check.sh         Applies the migrations to a throwaway database and checks them.
 deploy/                     Dockerfile and docker-compose for the server stack.
 ```
 
@@ -62,10 +67,13 @@ dotnet run --project src/Meridian.Wire.Gen     # after editing Schema/messages.w
 dotnet run --project src/Meridian.ContentCompiler   # after editing anything in content/
 scripts/m0-gate.sh 100 60                      # load test: bots, seconds
 scripts/m0-gate.sh 100 60 hunt                 # same, with bots fighting mobs
+scripts/db-check.sh                            # migrations against a throwaway Postgres
 ```
 
 Run the stack by hand, each in its own terminal (development keys are used and a warning
-is printed when the `MERIDIAN_*_KEY` variables are unset):
+is printed when the `MERIDIAN_*_KEY` variables are unset). Auth and zone share a development
+store, a JSON file in your local app-data folder (`MERIDIAN_STORE_DIR` moves it), so accounts
+and characters survive restarts without a database:
 
 ```bash
 dotnet run --project src/Meridian.Server.Zone
@@ -86,19 +94,25 @@ could not pull base images).
    `dotnet run --project src/Meridian.Server.Zone`, `...Gateway`, `...Auth`.
 3. Open `client/project.godot` in Godot and press Play (F5), or from a shell:
    `godot --path client`.
-4. Log in with any name and the password `dev`. To play with a friend, run the servers on a
+4. Create an account (any name, a password of 8+ characters), create a character, and press
+   Play. To play with a friend, run the servers on a
    machine you both reach and set `MERIDIAN_PUBLIC_GATEWAY_HOST` on auth to its address.
 
 Controls: WASD move, right-drag to look, wheel to zoom, Tab or left-click to target,
-Q toggles auto-attack, Esc clears the target, Enter chats.
+Q toggles auto-attack, Esc clears the target, Enter chats. `/train Rifle 10` spends skill
+points (a proper training window arrives in M2.5).
 
 Headless autoplay (what the M1 gate uses):
-`godot --headless --path client -- --autopilot --user Ann --pass dev --timeout 120`
+`godot --headless --path client -- --autopilot --user Ann --pass autopilot1 --timeout 120`
+(registers the account and creates a character named after it on first run)
 
 ## How a session works
 
-1. The client posts credentials to `auth` (`POST /v1/login`) and gets back a random 32-byte
-   session key and a ticket sealed with a key only auth and gateway share.
+1. The client logs in to `auth` (`POST /v1/login`; `/v1/register` creates the account) and
+   gets a short-lived bearer token and its character list. It can create characters
+   (`POST /v1/characters`), then asks to play one (`POST /v1/play`). Auth checks the character
+   is the account's and returns a random 32-byte session key and a ticket, sealed with a key
+   only auth and gateway share, naming the account and character.
 2. The client connects to the gateway over UDP, sending the schema hash and the ticket as
    connection data. The gateway rejects version mismatches, forged/expired tickets and
    reused tickets, with a reason the client can show.
@@ -129,10 +143,56 @@ counts as 1), scaled by the attacker's `ThreatModifier` stat, which Protocols ca
 lower. After a kill the corpse stays targeted until the player clears it. Dead mobs
 respawn at their spawn point; dead players respawn at a spawn point after 5 s at full health.
 
-## Known limits and next steps (M1)
+## Accounts and saving (M2)
 
-- **No persistence yet.** Auth accepts any valid username with the dev password; characters
-  are created fresh on join. Postgres and real accounts arrive in M2.
+- **Accounts**: usernames are unique ignoring case. Passwords are hashed as self-describing
+  PHC strings, so the algorithm can change without a migration: weaker hashes are replaced on
+  the next login. Today that is PBKDF2-SHA256 at 600,000 iterations; Argon2id replaces it once
+  its package can be restored. A login for an unknown user costs the same as a wrong password.
+- **Stores** (`MERIDIAN_STORE`): `file` (default; one JSON file auth and zone share through a
+  lock file and atomic replace) or `memory` (one process, tests). The Postgres store implements
+  the same contract against `db/migrations`; its contract tests are the ones the other stores pass.
+- **What is saved**: level, XP, unspent points, how far each skill was trained above its
+  starting value (so content changes to starting values reach existing characters), and zone,
+  position and health. Identity (account, name, profession, origin) is fixed at creation; a
+  save can never change it.
+- **Write-behind**: the zone never waits on the store. A changed character is checkpointed
+  every 30 s (staggered), on leave, and on shutdown (SIGTERM included); a background saver
+  writes batches. Per character the newest record wins and saves run in order.
+- **Versions**: every save names the version it read. If something else saved the character
+  meanwhile, the zone stops saving it and drops the player instead of overwriting.
+- **Reconnects**: a join reads the saver's unsaved copy before the store's, and the same
+  character logging in again takes over the live player and drops the old session.
+
+## Characters (M2)
+
+A character is a profession (Warden, Medic, Operative, Overload so far) and an origin
+(Baseline, Nightborn). All of it is content (`content/professions.yaml`, `origins.yaml`,
+`progression.yaml`); the rules are `CharacterBuild` in `Meridian.Core`, shared by the
+server and the client so the client can show costs and caps without asking.
+
+- **Starting values**: common stats from `new_character.yaml`, then origin attributes, then
+  profession starting skills on top.
+- **Cost tiers**: every trainable stat is Cheap, Normal, Expensive or Locked for a given
+  character. Attributes are priced by origin; skills by profession (a group default with
+  per-skill exceptions). Cost per point and cap per level come from the tier.
+- **Caps**: starting value + level × tier cap per level. Training checks, in order: valid
+  amount, trainable, not locked, under the cap, enough points.
+- **Experience**: everyone on a mob's threat list when it dies gets its full XP (no split, so
+  grouping never costs anyone). Levelling grants points from the progression curve plus the
+  origin's bonus, and heals to the new maximum.
+
+The zone sends a `CharacterSheet` (every stat's base and effective value) on join and
+whenever stats, XP or points change; `XpGained` and `Notice` (training refusals) are events.
+Profession and origin are chosen when the character is created and never change.
+
+## Known limits and next steps
+
+- **The Postgres store and Argon2id are not in yet**: their packages could not be restored on
+  the build machine. The schema, migration runner and checks are done; the development file
+  store stands in and is not meant for production.
+- **Login sessions live in the auth process's memory**, so restarting auth logs everyone out of
+  character select (not out of the game). Fine for one auth instance.
 - **Placeholder art**: capsules and a glassy six-legged skitter built from primitives.
 - **Prediction blends rather than replays inputs.** Fine without collision; input replay
   arrives with terrain.
@@ -141,5 +201,5 @@ respawn at their spawn point; dead players respawn at a spawn point after 5 s at
   counts asks for it.
 - **The auth service speaks plain HTTP** for local development. Production must put TLS in
   front of it; session keys must never travel in clear.
-- **Skill training costs and caps** (points per level, cost tiers by profession and origin)
-  are deferred to M2 with the rest of the build loop.
+- **Only four professions and two origins** are in content; the remaining ids are reserved.
+  Asking for one at login is refused.

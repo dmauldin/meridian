@@ -45,7 +45,7 @@ public sealed class GameConnection : IDisposable
     public long BytesReceived { get; private set; }
 
     /// <summary>Starts connecting. Completion shows up as <see cref="Connected"/> after a few polls.</summary>
-    public void Connect(string host, int port, LoginResponse login)
+    public void Connect(string host, int port, PlayResponse login)
     {
         ArgumentNullException.ThrowIfNull(login);
         if (_peer is not null)

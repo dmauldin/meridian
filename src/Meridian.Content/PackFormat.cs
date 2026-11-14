@@ -12,6 +12,9 @@ public sealed record PackDto(
     List<ProtocolDto> Protocols,
     List<MobDto> Mobs,
     List<ZoneDto> Zones,
+    List<ProfessionDto> Professions,
+    List<OriginDto> Origins,
+    ProgressionDto Progression,
     NewCharacterDto NewCharacter);
 
 public sealed record AnchorDto(int Ql, int Value);
@@ -81,7 +84,8 @@ public sealed record MobDto(
     int AggroRadiusMm,
     int LeashMm,
     int SpeedMmPerSecond,
-    int RespawnMs);
+    int RespawnMs,
+    int Xp);
 
 public sealed record BoundsDto(int MinX, int MinZ, int MaxX, int MaxZ);
 
@@ -89,7 +93,34 @@ public sealed record SpawnDto(string MobKey, int Count, int CenterX, int CenterZ
 
 public sealed record ZoneDto(uint Id, string Key, string Name, BoundsDto Bounds, List<SpawnDto> Spawns);
 
-public sealed record NewCharacterDto(SortedDictionary<string, int> Stats, string StartingWeapon, int StartingWeaponQl);
+public sealed record NewCharacterDto(SortedDictionary<string, int> Stats);
+
+public sealed record ProfessionDto(
+    int Id,
+    string Key,
+    string Name,
+    SortedDictionary<string, string> GroupTiers,
+    SortedDictionary<string, string> SkillTiers,
+    SortedDictionary<string, int> StartingSkills,
+    string StartingWeapon,
+    int StartingWeaponQl);
+
+public sealed record OriginDto(
+    int Id,
+    string Key,
+    string Name,
+    SortedDictionary<string, int> Attributes,
+    SortedDictionary<string, string> AttributeTiers,
+    int BonusPointsPerLevel);
+
+public sealed record TierRuleDto(int CostPerPoint, int CapPerLevel);
+
+public sealed record ProgressionDto(
+    int MaxLevel,
+    List<AnchorDto> XpToNext,
+    List<AnchorDto> PointsPerLevel,
+    int StartingPoints,
+    SortedDictionary<string, TierRuleDto> Tiers);
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

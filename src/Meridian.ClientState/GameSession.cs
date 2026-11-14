@@ -30,15 +30,26 @@ public sealed class GameSession : IDisposable
 
     public string? DisconnectReason => Connection.DisconnectReason;
 
-    /// <summary>Logs in over HTTP and starts connecting to the gateway it names.</summary>
-    /// <exception cref="HttpRequestException">Login was refused or the auth service is unreachable.</exception>
-    public static async Task<GameSession> StartAsync(HttpClient http, string username, string password, CancellationToken cancellationToken = default)
+    /// <summary>Starts connecting to the gateway <paramref name="play"/> names, as the character it was issued for.</summary>
+    public static GameSession Start(PlayResponse play, string characterName)
     {
-        var login = await new AuthClient(http).LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(play);
         var world = new ClientWorld();
         var connection = new GameConnection(world);
-        connection.Connect(login.GatewayHost, login.GatewayPort, login);
-        return new GameSession(connection, world, username);
+        connection.Connect(play.GatewayHost, play.GatewayPort, play);
+        return new GameSession(connection, world, characterName);
+    }
+
+    /// <summary>
+    /// Development shortcut (headless autopilot, tests): registers if needed, logs in, creates the
+    /// character if the account lacks it, and connects. See <see cref="AuthClient.QuickPlayAsync"/>.
+    /// </summary>
+    /// <exception cref="AuthException">The auth service refused a step.</exception>
+    public static async Task<GameSession> QuickStartAsync(
+        HttpClient http, Credentials credentials, string characterName, string profession, string origin, CancellationToken cancellationToken = default)
+    {
+        var play = await new AuthClient(http).QuickPlayAsync(credentials, characterName, profession, origin, cancellationToken).ConfigureAwait(false);
+        return Start(play, characterName);
     }
 
     /// <summary>
@@ -73,15 +84,70 @@ public sealed class GameSession : IDisposable
 
     public void SetAttack(bool enabled) => Connection.Send(new SetAttack { Enabled = enabled });
 
-    /// <summary>Sends a chat line, trimmed and cut to the schema's 256-byte limit.</summary>
+    /// <summary>Raises <paramref name="stat"/> by <paramref name="points"/> (the server checks cost and cap).</summary>
+    public void Train(Meridian.Core.Stats.Stat stat, int points) =>
+        Connection.Send(new TrainSkill { Stat = (ushort)stat, Points = (ushort)Math.Clamp(points, 0, ushort.MaxValue) });
+
+    /// <summary>
+    /// Sends a chat line, trimmed and cut to the schema's 256-byte limit. Lines starting with
+    /// <c>/</c> are commands (see <see cref="TryCommand"/>) and are not sent as chat.
+    /// </summary>
     public void Say(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+        if (TryCommand(text.Trim(), out var feedback))
+        {
+            if (feedback is not null)
+            {
+                World.AddLocalNotice(feedback);
+            }
+            return;
+        }
         text = TruncateUtf8(text.Trim(), 256);
         if (text.Length > 0)
         {
             Connection.Send(new ChatSay { Text = text });
         }
+    }
+
+    /// <summary>
+    /// Chat commands until the real UI exists (M2.5): <c>/train Rifle 10</c>. Returns false if
+    /// the line is not a command. <paramref name="feedback"/> is a message for the player, if any.
+    /// </summary>
+    public bool TryCommand(string line, out string? feedback)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        feedback = null;
+        if (!line.StartsWith('/'))
+        {
+            return false;
+        }
+        if (TryParseTrain(line, out var stat, out var points))
+        {
+            if (World.Build is { } build)
+            {
+                feedback = $"Training {stat} by {points} ({points * build.CostPerPoint(stat)} points; cap {build.Cap(stat)}).";
+            }
+            Train(stat, points);
+            return true;
+        }
+        feedback = "Commands: /train <Stat> <points>   e.g. /train Rifle 10";
+        return true;
+    }
+
+    /// <summary>Parses <c>/train &lt;Stat&gt; &lt;points&gt;</c>; stat names are case-insensitive, numbers are not stats.</summary>
+    public static bool TryParseTrain(string line, out Meridian.Core.Stats.Stat stat, out int points)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        stat = default;
+        points = 0;
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts is ["/train", var name, var amount]
+            && !char.IsDigit(name[0])
+            && Enum.TryParse(name, ignoreCase: true, out stat)
+            && Enum.IsDefined(stat)
+            && int.TryParse(amount, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out points)
+            && points > 0;
     }
 
     /// <summary>Cuts <paramref name="text"/> to at most <paramref name="maxBytes"/> UTF-8 bytes on a character boundary.</summary>

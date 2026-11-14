@@ -3,6 +3,7 @@ using Meridian.Core.Combat;
 using Meridian.Core.Content;
 using Meridian.Core.Stats;
 using Meridian.Core.World;
+using Meridian.Persistence;
 
 namespace Meridian.Server.Zone;
 
@@ -75,16 +76,31 @@ public abstract class Entity
 /// <summary>A connected player's simulation state.</summary>
 public sealed class Player : Entity
 {
-    public Player(uint entityId, ClientRef client, ulong accountId, string name, Character character, WeaponProfile weapon)
-        : base(entityId, EntityKind.Player, name, character, weapon)
+    public Player(uint entityId, ClientRef client, CharacterRecord record, CharacterBuild build, WeaponProfile weapon)
+        : base(entityId, EntityKind.Player, record.Name, build.Character, weapon)
     {
         Client = client;
-        AccountId = accountId;
+        Record = record;
+        Build = build;
     }
+
+    /// <summary>The stored character as loaded: identity and the version saves are made against.</summary>
+    public CharacterRecord Record { get; }
+
+    /// <summary>The stored character's id; 0 for an unstored test character.</summary>
+    public ulong CharacterId => Record.Id;
+
+    /// <summary>What a save would capture; when it differs from <see cref="LastSavedKey"/> a checkpoint is due.</summary>
+    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health);
+
+    internal SaveKey LastSavedKey { get; set; }
 
     public ClientRef Client { get; }
 
-    public ulong AccountId { get; }
+    /// <summary>Level, experience, skill points and training rules.</summary>
+    public CharacterBuild Build { get; }
+
+    public ulong AccountId => Record.AccountId;
 
     public uint LastInputSequence { get; set; }
 
@@ -98,9 +114,14 @@ public sealed class Player : Entity
     internal Meridian.Wire.Delta.SnapshotHistory History { get; } = new();
 
     internal SelfStatusKey? LastSentStatus { get; set; }
+
+    /// <summary>What the last CharacterSheet reflected, to send it only on change.</summary>
+    internal (long StatsRevision, long Xp, int Points)? LastSentSheet { get; set; }
 }
 
 /// <summary>What <c>SelfStatus</c> last told the player, to send only changes.</summary>
+internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health);
+
 internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead, int RunSpeed);
 
 public enum MobState : byte

@@ -263,6 +263,15 @@ public class ClientWorldTests
     }
 
     [Fact]
+    public void Experience_and_notices_become_ui_events()
+    {
+        var w = Joined();
+        w.OnXpGained(null!, new XpGained { Amount = 120, Level = 2, LevelsGained = 1 });
+        w.OnNotice(null!, new Notice { Kind = 1, Text = "Not enough skill points." });
+        Assert.Equal([new ExperienceGained(120, 2, 1), new SystemNotice("Not enough skill points.")], w.DrainEvents());
+    }
+
+    [Fact]
     public void Chat_is_truncated_on_a_character_boundary()
     {
         var text = new string('é', 200); // 2 bytes each
@@ -270,5 +279,63 @@ public class ClientWorldTests
         Assert.Equal(128, cut.Length);
         Assert.Equal("hello", GameSession.TruncateUtf8("hello", 256));
         Assert.Equal("👍", GameSession.TruncateUtf8("👍👍", 5)); // 4-byte emoji never split
+    }
+}
+
+public class CharacterMirrorTests
+{
+    [Fact]
+    public void The_sheet_is_mirrored_as_a_build_with_the_servers_costs_and_caps()
+    {
+        var pack = Meridian.Content.ContentPacks.Embedded;
+        var server = Meridian.Core.Content.CharacterBuild.Create(pack, Meridian.Core.Characters.Profession.Operative, Meridian.Core.Characters.Origin.Baseline);
+        server.AddXp(400);
+        server.Train(Meridian.Core.Stats.Stat.Rifle, 10);
+
+        var stats = Meridian.Core.Stats.StatIndex.All
+            .Select(s => new StatValue { Stat = (ushort)s, BaseValue = server.Character.Stats.GetBase(s), Value = server.Character.Get(s) })
+            .ToArray();
+        var w = new ClientWorld();
+        w.OnCharacterSheet(null!, new CharacterSheet
+        {
+            Profession = (byte)server.Character.Profession,
+            Origin = (byte)server.Character.Origin,
+            Level = (ushort)server.Level,
+            Xp = (uint)server.Xp,
+            XpToNext = (uint)server.XpToNext,
+            UnspentPoints = server.UnspentPoints,
+            Stats = stats,
+        });
+
+        var mirror = w.Build!;
+        Assert.Equal(server.Level, mirror.Level);
+        Assert.Equal(server.UnspentPoints, mirror.UnspentPoints);
+        foreach (var stat in Meridian.Core.Characters.Skills.Trainable)
+        {
+            Assert.Equal(server.Cap(stat), mirror.Cap(stat));
+            Assert.Equal(server.CostPerPoint(stat), mirror.CostPerPoint(stat));
+        }
+        Assert.Equal(server.Character.Get(Meridian.Core.Stats.Stat.MaxHealth), w.EffectiveStats[Meridian.Core.Stats.Stat.MaxHealth]);
+    }
+}
+
+public class ChatCommandTests
+{
+    [Theory]
+    [InlineData("/train Rifle 10", true, Meridian.Core.Stats.Stat.Rifle, 10)]
+    [InlineData("/train   kineticflux   3", true, Meridian.Core.Stats.Stat.KineticFlux, 3)]
+    [InlineData("/train 71 10", false, default(Meridian.Core.Stats.Stat), 0)]     // numeric stat id
+    [InlineData("/train Rifle -5", false, default(Meridian.Core.Stats.Stat), 0)]
+    [InlineData("/train Rifle 0", false, default(Meridian.Core.Stats.Stat), 0)]
+    [InlineData("/train Wizardry 5", false, default(Meridian.Core.Stats.Stat), 0)]
+    [InlineData("/train Rifle", false, default(Meridian.Core.Stats.Stat), 0)]
+    [InlineData("train Rifle 5", false, default(Meridian.Core.Stats.Stat), 0)]
+    public void Train_command_parsing(string line, bool ok, Meridian.Core.Stats.Stat stat, int points)
+    {
+        Assert.Equal(ok, GameSession.TryParseTrain(line, out var s, out var p));
+        if (ok)
+        {
+            Assert.Equal((stat, points), (s, p));
+        }
     }
 }

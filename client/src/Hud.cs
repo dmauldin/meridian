@@ -11,6 +11,8 @@ public partial class Hud : CanvasLayer
     private readonly Label _selfName = new();
     private readonly ProgressBar _selfHealth = Bar(new Color(0.3f, 0.85f, 0.45f));
     private readonly Label _selfHealthText = new();
+    private readonly Label _selfProgress = new() { Modulate = new Color(0.75f, 0.85f, 1f) };
+    private readonly ProgressBar _selfXp = Bar(new Color(0.55f, 0.45f, 0.95f));
     private readonly PanelContainer _targetPanel = new() { Visible = false };
     private readonly Label _targetName = new();
     private readonly ProgressBar _targetHealth = Bar(new Color(0.9f, 0.35f, 0.3f));
@@ -36,6 +38,9 @@ public partial class Hud : CanvasLayer
         selfBox.AddChild(_selfName);
         selfBox.AddChild(_selfHealth);
         selfBox.AddChild(_selfHealthText);
+        selfBox.AddChild(_selfProgress);
+        _selfXp.CustomMinimumSize = new Vector2(0, 6);
+        selfBox.AddChild(_selfXp);
 
         // Target frame, top-centre.
         _targetPanel.CustomMinimumSize = new Vector2(300, 0);
@@ -79,6 +84,15 @@ public partial class Hud : CanvasLayer
         _selfHealth.MaxValue = Math.Max(1, maxHealth);
         _selfHealth.Value = Math.Max(0, health);
         _selfHealthText.Text = $"{Math.Max(0, health)} / {maxHealth}";
+    }
+
+    /// <summary>Level, profession, XP progress and unspent skill points under the health bar.</summary>
+    public void SetProgress(int level, string profession, long xp, long xpToNext, int unspentPoints)
+    {
+        var points = unspentPoints > 0 ? $"   {unspentPoints} skill points (/train)" : "";
+        _selfProgress.Text = $"Level {level} {profession}{points}";
+        _selfXp.MaxValue = Math.Max(1, xpToNext);
+        _selfXp.Value = xpToNext == 0 ? _selfXp.MaxValue : xp;
     }
 
     public void SetTarget(string? name, int healthPercent, bool attacking, bool dead)

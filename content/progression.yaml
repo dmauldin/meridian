@@ -1,0 +1,11 @@
+# Levelling and the skill-point economy. Curves are over character level.
+max_level: 30
+starting_points: 60
+xp_to_next: { 1: 300, 10: 2500, 30: 18000 }     # XP to go from level L to L+1
+points_per_level: { 2: 40, 30: 90 }               # granted on reaching level L
+tiers:
+  # cost_per_point: skill points per point of the stat.
+  # cap_per_level:  how far above its starting value a stat may be trained, per level.
+  cheap:     { cost_per_point: 1, cap_per_level: 8 }
+  normal:    { cost_per_point: 2, cap_per_level: 6 }
+  expensive: { cost_per_point: 4, cap_per_level: 4 }
