@@ -84,6 +84,34 @@ public class ZoneItemTests
         Assert.Contains(outbox.Last<InventoryState>(A).Worn!, w => w.TemplateId == (uint)Kestrel && !w.Active);
     }
 
+    /// <summary>The sequence the PR's "try it" section gives, on an untouched new Operative.</summary>
+    [Fact]
+    public void A_fresh_operative_twinks_a_ql9_carbine_with_gloves()
+    {
+        var (sim, outbox) = Zone(dev: true);
+        var p = sim.Join(A, CharacterRecords.New(Pack, 1, "Rook", Profession.Operative, Origin.Baseline) with { Id = 7, Version = 1 })!;
+        Assert.Equal(30, p.Character.Get(Stat.Rifle));
+        foreach (var line in new[] { "/give rifle.combine_carbine 9", "/give armor.marksman_gloves 1" })
+        {
+            sim.HandleClientPacket(A, Envelope.ToArray(new ChatSay { Text = line }));
+        }
+        var carbine = p.Outfit.Inventory.Single(i => i.Item.Ql == 9).Position;
+        var gloves = p.Outfit.Inventory.Single(i => i.Item.TemplateId == Gloves).Position;
+
+        Send(sim, new EquipItem { Position = (byte)carbine });
+        sim.Step();
+        Assert.Contains("Rifle 30/35", outbox.Last<Notice>(A).Text, StringComparison.Ordinal);
+
+        Send(sim, new EquipItem { Position = (byte)gloves });
+        Send(sim, new EquipItem { Position = (byte)carbine });
+        sim.Step();
+        Assert.Contains(p.Outfit.Worn, w => w.Item.Ql == 9 && w.Active);
+
+        Send(sim, new UnequipItem { Slot = (byte)EquipSlot.Hands });
+        sim.Step();
+        Assert.Equal("Fists", p.Weapon.Name);
+    }
+
     [Fact]
     public void Items_and_their_state_survive_a_save_and_reload()
     {
