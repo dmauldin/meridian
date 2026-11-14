@@ -17,6 +17,9 @@ internal sealed class ItemYaml
 
     public string Slot { get; set; } = "";
 
+    /// <summary>For a Protocol item: the key of the Protocol it teaches. Such items have no slot.</summary>
+    public string? Protocol { get; set; }
+
     public List<int> Ql { get; set; } = [];
 
     public List<string> Professions { get; set; } = [];
@@ -95,6 +98,9 @@ internal sealed class ProtocolYaml
     public Dictionary<string, int> Requirements { get; set; } = [];
 
     public List<EffectYaml> Effects { get; set; } = [];
+
+    [YamlMember(Alias = "range_m")]
+    public double RangeMetres { get; set; }
 }
 
 internal sealed class AttackYaml
@@ -237,6 +243,9 @@ internal sealed class ProfessionYaml
     public string Name { get; set; } = "";
 
     public StartingWeaponYaml StartingWeapon { get; set; } = new();
+
+    /// <summary>Protocol keys every new character of this profession already knows.</summary>
+    public List<string> StartingProtocols { get; set; } = [];
 
     public Dictionary<string, string> GroupCosts { get; set; } = [];
 

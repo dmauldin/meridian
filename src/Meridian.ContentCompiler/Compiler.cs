@@ -136,16 +136,18 @@ public static class Compiler
     private static ItemDto Item(ItemYaml y)
     {
         Require(y.Id > 0, "id must be positive");
+        Require(y.Protocol is null || string.IsNullOrEmpty(y.Slot), "a protocol item has no slot");
         Require(y.Ql is [var lo, var hi] && lo >= QlCurve.MinQl && hi <= QlCurve.MaxQl && lo <= hi, $"ql must be [min, max] within {QlCurve.MinQl}–{QlCurve.MaxQl}");
         return new ItemDto(
-            y.Id, y.Key, y.Name, y.Slot, y.Ql[0], y.Ql[1],
+            y.Id, y.Key, y.Name, y.Protocol is null ? y.Slot : nameof(Meridian.Core.Items.EquipSlot.None), y.Ql[0], y.Ql[1],
             y.Requirements.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => new RequirementDto(kv.Key, Anchors(kv.Value))).ToList(),
             [.. y.Professions],
             y.Effects.Select(e => { var (kind, value) = KindAndValue(e); return new ScaledEffectDto(e.Stat, kind, CurveOf(value)); }).ToList(),
             y.Weapon is { } w
                 ? new WeaponDto(w.AttackSkill, w.Initiative, w.Defence, w.DamageType, Positive(w.AttackTimeMs, "attack_time_ms"),
                     Mm(w.RangeMetres, "range_m"), Anchors(w.MinDamage), Anchors(w.MaxDamage))
-                : null);
+                : null,
+            y.Protocol);
     }
 
     private static ProtocolDto Protocol(ProtocolYaml y, Dictionary<string, int> lineIds)
@@ -164,7 +166,8 @@ public static class Compiler
             y.Id, y.Key, y.Name, lineIds[y.Line], y.Strength, y.LatticeCost, y.EnergyCost,
             Ms(y.DurationSeconds, "duration_s"), target, [.. y.Professions],
             new SortedDictionary<string, int>(y.Requirements, StringComparer.Ordinal),
-            y.Effects.Select(e => { var (kind, value) = KindAndValue(e); return new FlatEffectDto(e.Stat, kind, Integer(value)); }).ToList());
+            y.Effects.Select(e => { var (kind, value) = KindAndValue(e); return new FlatEffectDto(e.Stat, kind, Integer(value)); }).ToList(),
+            Mm(y.RangeMetres, "range_m"));
     }
 
     private static MobDto Mob(MobYaml y)
@@ -190,7 +193,7 @@ public static class Compiler
             id, y.Profession.ToLowerInvariant(), y.Name,
             Tiers(y.GroupCosts), Tiers(y.SkillCosts),
             new SortedDictionary<string, int>(y.StartingSkills, StringComparer.Ordinal),
-            y.StartingWeapon.Item, y.StartingWeapon.Ql);
+            y.StartingWeapon.Item, y.StartingWeapon.Ql, [.. y.StartingProtocols]);
     }
 
     private static OriginDto OriginOf(OriginYaml y)

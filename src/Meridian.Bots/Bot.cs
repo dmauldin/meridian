@@ -251,6 +251,10 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
 
     public void OnInventoryState(GameConnection context, in InventoryState message) => Items = message.Carried?.Length ?? 0;
 
+    public void OnProtocolState(GameConnection context, in ProtocolState message)
+    {
+    }
+
     /// <summary>Items carried, as the last inventory update said (loot shows up here).</summary>
     public int Items { get; private set; }
 

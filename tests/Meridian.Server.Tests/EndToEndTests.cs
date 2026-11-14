@@ -402,5 +402,9 @@ public sealed class EndToEndTests : IDisposable
         public InventoryState? Inventory { get; private set; }
 
         public void OnInventoryState(GameConnection context, in InventoryState message) => Inventory = message;
+
+        public ProtocolState? Protocols { get; private set; }
+
+        public void OnProtocolState(GameConnection context, in ProtocolState message) => Protocols = message;
     }
 }

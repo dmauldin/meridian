@@ -321,6 +321,11 @@ public sealed partial class ZoneSimulation
                 break;
             case Player player:
                 player.RespawnAtTick = Tick + (uint)_options.PlayerRespawnTicks;
+                if (player.Lattice.Running.Running.Count > 0)
+                {
+                    player.Lattice.ClearRunning(); // death ends every buff (and so any twink built on one)
+                    SendNotice(player, NoticeInfo, "Your Protocols ended when you died.");
+                }
                 foreach (var m in _mobs)
                 {
                     m.Threat.Remove(player.EntityId);

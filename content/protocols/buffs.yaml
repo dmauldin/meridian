@@ -1,4 +1,5 @@
-# Buff Protocols. requirements are the caster's skills; effects apply to the target.
+# Buff Protocols. requirements are the caster's skills (also needed to upload it); effects apply
+# to the target. range_m is how far from the caster the target may be.
 - id: 5001
   key: buff.rifle_enhancement_1
   name: Rifle Enhancement I
@@ -8,6 +9,7 @@
   energy_cost: 10
   duration_s: 600
   target: any_player
+  range_m: 30
   professions: [Operative, Trooper]
   requirements: { KineticFlux: 20 }
   effects:
@@ -22,6 +24,7 @@
   energy_cost: 25
   duration_s: 600
   target: any_player
+  range_m: 30
   professions: [Operative, Trooper]
   requirements: { KineticFlux: 120 }
   effects:
@@ -37,6 +40,7 @@
   energy_cost: 15
   duration_s: 600
   target: any_player
+  range_m: 30
   professions: [Medic]
   requirements: { BioWeaving: 25 }
   effects:
@@ -52,6 +56,7 @@
   energy_cost: 20
   duration_s: 900
   target: self
+  range_m: 30
   professions: [Warden]
   requirements: { MindCraft: 15 }
   effects:

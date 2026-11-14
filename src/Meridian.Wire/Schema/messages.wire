@@ -77,6 +77,22 @@ message 109 DiscardItem server_bound reliable_ordered
   u8 position
 end
 
+# Upload the Protocol item at this inventory position (consumes it if it is learned).
+message 110 UploadProtocol server_bound reliable_ordered
+  u8 position
+end
+
+# Cast a known Protocol on a player: 0 means yourself. The zone checks everything.
+message 111 CastProtocol server_bound reliable_ordered
+  u32 protocolId
+  varu32 targetId
+end
+
+# Drop a Protocol running on yourself.
+message 112 CancelProtocol server_bound reliable_ordered
+  u32 protocolId
+end
+
 # ---------------------------------------------------------------- server → client
 
 # contentHash identifies the server's content pack; a client with different data must not play.
@@ -149,6 +165,8 @@ message 208 SelfStatus client_bound reliable_ordered
   bool attacking
   bool dead
   i32 runSpeed
+  i32 energy
+  i32 maxEnergy
 end
 
 # The receiving player was moved by the server (respawn); snap, don't interpolate.
@@ -208,6 +226,20 @@ message 214 InventoryState client_bound reliable_ordered
   u8 size
   list<CarriedItem>(120) carried
   list<WornItem>(32) worn
+end
+
+struct RunningProtocol
+  u32 protocolId
+  u32 remainingMs
+end
+
+# The receiving player's lattice: known Protocols (ascending ids) and what runs on it, sent on
+# join and whenever either changes. Remaining times count down on the client from receipt.
+message 215 ProtocolState client_bound reliable_ordered
+  list<u32>(512) known
+  list<RunningProtocol>(32) running
+  i32 latticeUsed
+  i32 latticeCapacity
 end
 
 message 212 XpGained client_bound reliable_ordered

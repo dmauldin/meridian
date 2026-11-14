@@ -42,8 +42,12 @@ public sealed record ItemTemplate(
     IReadOnlyList<ScaledRequirement> Requirements,
     IReadOnlyList<Profession> Professions,
     IReadOnlyList<ScaledEffect> Effects,
-    WeaponTemplate? Weapon)
+    WeaponTemplate? Weapon,
+    string? ProtocolKey = null)
 {
+    /// <summary>True for an item that teaches a Protocol when uploaded (it has no slot).</summary>
+    public bool IsProtocol => ProtocolKey is not null;
+
     /// <summary>Clamps <paramref name="ql"/> into this template's range.</summary>
     public int ClampQl(int ql) => Math.Clamp(ql, MinQl, MaxQl);
 
@@ -111,7 +115,8 @@ public sealed record ProtocolTemplate(
     ProtocolTarget Target,
     IReadOnlyList<Profession> Professions,
     IReadOnlyDictionary<Stat, int> Requirements,
-    IReadOnlyList<StatEffect> Effects)
+    IReadOnlyList<StatEffect> Effects,
+    int RangeMm)
 {
     public Requirement CastRequirement()
     {
