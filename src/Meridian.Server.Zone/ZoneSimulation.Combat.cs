@@ -313,6 +313,7 @@ public sealed partial class ZoneSimulation
         {
             case Mob mob:
                 AwardExperience(mob);
+                DropLoot(mob);
                 mob.State = MobState.Dead;
                 mob.Threat.Clear();
                 mob.TargetId = 0;

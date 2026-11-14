@@ -339,3 +339,43 @@ public class ChatCommandTests
         }
     }
 }
+
+public class ItemCommandTests
+{
+    [Theory]
+    [InlineData("/inv", GameSession.ItemCommand.List, 0)]
+    [InlineData("/equip 3", GameSession.ItemCommand.Equip, 3)]
+    [InlineData("/discard 0", GameSession.ItemCommand.Discard, 0)]
+    [InlineData("/unequip hands", GameSession.ItemCommand.Unequip, (int)Meridian.Core.Items.EquipSlot.Hands)]
+    [InlineData("/unequip TwoHand", GameSession.ItemCommand.Unequip, (int)Meridian.Core.Items.EquipSlot.TwoHand)]
+    [InlineData("/unequip 13", GameSession.ItemCommand.Help, 0)]     // slot ids are not names
+    [InlineData("/equip 999", GameSession.ItemCommand.Help, 0)]      // beyond a byte
+    [InlineData("/equip -1", GameSession.ItemCommand.Help, 0)]
+    [InlineData("/equip", GameSession.ItemCommand.Help, 0)]
+    [InlineData("/give rifle.kestrel_mk2 5", GameSession.ItemCommand.None, 0)] // the server's
+    [InlineData("hello", GameSession.ItemCommand.None, 0)]
+    public void Parsing(string line, GameSession.ItemCommand command, int argument)
+    {
+        Assert.Equal((command, argument), GameSession.ParseItemCommand(line));
+    }
+
+    [Fact]
+    public void The_inventory_mirror_and_listing()
+    {
+        var pack = Meridian.Content.ContentPacks.Embedded;
+        var w = new ClientWorld();
+        w.OnInventoryState(null!, new InventoryState
+        {
+            Size = 30,
+            Carried = [new CarriedItem { Position = 2, TemplateId = (uint)pack.Items["armor.marksman_gloves"].Id, Ql = 4 }],
+            Worn = [new WornItem { Slot = (byte)Meridian.Core.Items.EquipSlot.TwoHand, TemplateId = (uint)pack.Items["rifle.kestrel_mk2"].Id, Ql = 1, Active = false }],
+        });
+        Assert.Equal([new InventoryChanged()], w.DrainEvents());
+        Assert.Equal(new Meridian.Core.Items.OwnedItem(pack.Items["armor.marksman_gloves"].Id, 4), w.Inventory!.At(2));
+        Assert.Null(w.Inventory.At(0));
+        var text = GameSession.DescribeInventory(w.Inventory);
+        Assert.Contains("#2 Marksman Gloves QL 4", text, StringComparison.Ordinal);
+        Assert.Contains("TwoHand: Kestrel Mk2 QL 1 (inactive)", text, StringComparison.Ordinal);
+        Assert.Equal("Inventory not received yet.", GameSession.DescribeInventory(null));
+    }
+}

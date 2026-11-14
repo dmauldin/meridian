@@ -4,6 +4,7 @@ using Meridian.Core.Combat;
 using Meridian.Core.Content;
 using Meridian.Core.Stats;
 using Meridian.Core.Randomness;
+using Meridian.Core.Items;
 using Meridian.Core.World;
 using Meridian.Persistence;
 using Meridian.Wire;
@@ -61,6 +62,12 @@ public sealed record ZoneOptions
     /// at 20 Hz. Staggered by entity id like snapshots. Leaving always checkpoints.
     /// </summary>
     public int CheckpointEveryTicks { get; init; } = 600;
+
+    /// <summary>
+    /// Development commands such as <c>/give</c>. Off by default; never enable on a server real
+    /// players use (there is no permission model yet).
+    /// </summary>
+    public bool DevCommands { get; init; }
 
     public int TickMs => 1_000 / TickRateHz;
 }
@@ -168,7 +175,14 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         {
             return null;
         }
-        var player = new Player(_nextEntityId++, client, record, build, build.StartingWeapon(_content));
+        var outfit = new Outfit(_content, build.Character, _content.NewCharacter.InventorySlots);
+        if (record.Items.Count == 0)
+        {
+            // Characters created before items existed (M2.3 development stores) get their kit.
+            record = record with { Items = CharacterRecords.New(_content, record.AccountId, record.Name, record.Profession, record.Origin).Items };
+        }
+        var skipped = record.LoadItems(outfit);
+        var player = new Player(_nextEntityId++, client, record, build, outfit, _content.UnarmedWeapon);
         if (record.Placement is { Health: > 0 } saved && saved.Zone == _zone.Key)
         {
             player.Position = saved.Position;
@@ -177,7 +191,9 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         else
         {
             player.Position = SpawnPoint(client);
+            player.Health = player.MaxHealth; // after items: they can raise the maximum
         }
+        player.LastCheckedStatsRevision = player.Character.Stats.Revision;
         player.LastSavedKey = player.SaveKey;
         if (record.Id != 0)
         {
@@ -199,6 +215,12 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         });
         SendStatusIfChanged(player);
         SendSheetIfChanged(player);
+        SendInventoryIfChanged(player);
+        if (skipped.Count > 0)
+        {
+            // Content removed or reshaped an item since the save: say so rather than vanish it silently.
+            SendNotice(player, NoticeInfo, $"{skipped.Count} saved item(s) no longer exist and were removed.");
+        }
         return player;
     }
 
@@ -210,7 +232,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     {
         ArgumentNullException.ThrowIfNull(player);
         var health = player.Dead ? 0 : player.Health;
-        return player.Record.WithProgress(player.Build, new Placement(_zone.Key, player.Position, health), player.Record.Items);
+        return player.Record.WithProgress(player.Build, new Placement(_zone.Key, player.Position, health), CharacterRecords.ItemsOf(player.Outfit));
     }
 
     /// <summary>
@@ -301,6 +323,8 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
         foreach (var p in _players)
         {
+            SettleItems(p);
+            SendInventoryIfChanged(p);
             SendStatusIfChanged(p);
             SendSheetIfChanged(p);
         }
@@ -352,6 +376,11 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         var text = message.Text?.Trim();
         if (string.IsNullOrEmpty(text))
         {
+            return;
+        }
+        if (text.StartsWith('/'))
+        {
+            Command(speaker, text); // commands are never broadcast
             return;
         }
         var chat = new ChatMessage { FromEntityId = speaker.EntityId, FromName = speaker.Name, Text = text };
