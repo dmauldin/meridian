@@ -128,6 +128,27 @@ public abstract class StoreContractTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_character_knows_its_starting_protocols()
+    {
+        var a = await Account();
+        var wren = (await Store.CreateCharacterAsync(Draft(a.Id, "Wren", Profession.Medic), 8, Ct)).Created!;
+        var loaded = (await Store.LoadCharacterAsync(wren.Id, Ct))!;
+        Assert.Equal([Pack.Protocols["buff.reflex_boost_1"].Id], loaded.KnownProtocols);
+        Assert.Empty(loaded.Buffs);
+    }
+
+    [Fact]
+    public async Task A_save_replaces_known_protocols_and_buffs()
+    {
+        var a = await Account();
+        var rook = (await Store.CreateCharacterAsync(Draft(a.Id, "Rook"), 8, Ct)).Created!;
+        await Store.SaveCharactersAsync([rook with { KnownProtocols = [5002, 5001, 5001], Buffs = [new(5101, 30_000), new(5001, 0)] }], Ct);
+        var loaded = (await OpenAgain().LoadCharacterAsync(rook.Id, Ct))!;
+        Assert.Equal([5001, 5002], loaded.KnownProtocols);              // de-duplicated, ascending
+        Assert.Equal([new SavedBuff(5101, 30_000)], loaded.Buffs);      // nothing already over
+    }
+
+    [Fact]
     public async Task A_save_never_changes_identity()
     {
         var a = await Account();
