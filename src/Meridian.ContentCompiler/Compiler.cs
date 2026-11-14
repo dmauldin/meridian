@@ -74,7 +74,7 @@ public static class Compiler
         var newCharacterFile = Path.Combine(contentDirectory, "new_character.yaml");
         if (Load<NewCharacterYaml>(newCharacterFile, errors) is { } nc)
         {
-            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal));
+            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal), nc.Unarmed, nc.InventorySlots);
         }
 
         var professions = new List<ProfessionDto>();
@@ -178,7 +178,8 @@ public static class Compiler
             new AttackDto(a.Name, a.AttackSkill, a.Initiative, a.Defence, a.DamageType, Positive(a.AttackTimeMs, "attack_time_ms"),
                 Mm(a.RangeMetres, "range_m"), a.MinDamage, a.MaxDamage),
             Mm(y.AggroMetres, "aggro_m", allowZero: true), Mm(y.LeashMetres, "leash_m"), Mm(y.SpeedMetresPerSecond, "speed_m_s"), Ms(y.RespawnSeconds, "respawn_s"),
-            NonNegative(y.Xp, "xp"));
+            NonNegative(y.Xp, "xp"),
+            y.Loot.Select(l => new LootDto(l.Item, l.Chance, l.QlSpread)).ToList());
     }
 
     private static ProfessionDto Profession(ProfessionYaml y)

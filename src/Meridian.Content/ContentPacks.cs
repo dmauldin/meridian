@@ -78,7 +78,7 @@ public static class ContentPacks
             dto.Professions.Select(ToModel),
             dto.Origins.Select(ToModel),
             ToModel(dto.Progression),
-            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character")),
+            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character"), dto.NewCharacter.Unarmed, dto.NewCharacter.InventorySlots),
             hash);
     }
 
@@ -96,7 +96,7 @@ public static class ContentPacks
             pack.Professions.All.Select(ToDto).ToList(),
             pack.Origins.All.Select(ToDto).ToList(),
             ToDto(pack.Progression),
-            new NewCharacterDto(Sorted(pack.NewCharacter.Stats)));
+            new NewCharacterDto(Sorted(pack.NewCharacter.Stats), pack.NewCharacter.UnarmedKey, pack.NewCharacter.InventorySlots));
     }
 
     // ------------------------------------------------------------------ DTO -> model
@@ -143,7 +143,8 @@ public static class ContentPacks
             (ushort)d.Id, d.Key, d.Name, d.Level, Stats(d.Stats, where),
             new WeaponProfile(a.Name, Parse<Stat>(a.AttackSkill, where), Parse<Stat>(a.Initiative, where), Parse<Stat>(a.Defence, where),
                 Parse<DamageType>(a.DamageType, where), a.MinDamage, a.MaxDamage, a.AttackTimeMs, a.RangeMm),
-            d.AggroRadiusMm, d.LeashMm, d.SpeedMmPerSecond, d.RespawnMs, d.Xp);
+            d.AggroRadiusMm, d.LeashMm, d.SpeedMmPerSecond, d.RespawnMs, d.Xp,
+            (d.Loot ?? []).Select(l => new LootDef(l.Item, l.ChanceBp, l.QlSpread)).ToList());
     }
 
     /// <summary>Validates and converts one profession.</summary>
@@ -212,7 +213,8 @@ public static class ContentPacks
             m.Id, m.Key, m.Name, m.Level, Sorted(m.Stats),
             new AttackDto(a.Name, a.AttackSkill.ToString(), a.InitiativeSkill.ToString(), a.DefenceSkill.ToString(), a.DamageType.ToString(),
                 a.BaseAttackTimeMs, a.RangeMm, a.MinDamage, a.MaxDamage),
-            m.AggroRadiusMm, m.LeashMm, m.SpeedMmPerSecond, m.RespawnMs, m.Xp);
+            m.AggroRadiusMm, m.LeashMm, m.SpeedMmPerSecond, m.RespawnMs, m.Xp,
+            m.Loot.Select(l => new LootDto(l.ItemKey, l.ChanceBp, l.QlSpread)).ToList());
     }
 
     private static ProfessionDto ToDto(ProfessionDef p) => new(
