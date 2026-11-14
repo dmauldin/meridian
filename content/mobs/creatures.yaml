@@ -26,3 +26,8 @@
   speed_m_s: 4
   respawn_s: 10
   xp: 120
+  # Each entry rolls on its own; chance in basis points; QL = level +/- ql_spread.
+  loot:
+    - { item: armor.marksman_gloves, chance: 1500, ql_spread: 2 }
+    - { item: implant.ocular_reflex, chance: 1000, ql_spread: 2 }
+    - { item: rifle.kestrel_mk2, chance: 500, ql_spread: 2 }

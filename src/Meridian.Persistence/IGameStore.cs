@@ -29,8 +29,9 @@ public interface IGameStore
     Task<CharacterRecord?> LoadCharacterAsync(ulong characterId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Saves progression and placement for each record whose <see cref="CharacterRecord.Version"/>
-    /// matches the stored one, bumping the version. Identity fields are never changed by a save.
+    /// Saves progression, placement and items (replacing all of the character's items) for each
+    /// record whose <see cref="CharacterRecord.Version"/> matches the stored one, bumping the
+    /// version, atomically per character. Identity fields are never changed by a save.
     /// Records are independent: one conflict does not stop the others.
     /// </summary>
     Task<IReadOnlyList<SaveOutcome>> SaveCharactersAsync(IReadOnlyList<CharacterRecord> records, CancellationToken cancellationToken = default);

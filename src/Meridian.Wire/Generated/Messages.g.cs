@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0xB3C5E89D076FA9D9UL;
+    public const ulong Hash = 0xBB65567F0F07D161UL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -228,6 +228,81 @@ public partial struct TrainSkill : IWireMessage<TrainSkill>
         var value = default(TrainSkill);
         value.Stat = reader.ReadU16();
         value.Points = reader.ReadU16();
+        return value;
+    }
+}
+
+public partial struct EquipItem : IWireMessage<EquipItem>
+{
+    public const ushort Id = 107;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<EquipItem>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<EquipItem>.Delivery => Delivery.ReliableOrdered;
+
+    public byte Position;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Position);
+    }
+
+    public static EquipItem Read(ref WireReader reader)
+    {
+        var value = default(EquipItem);
+        value.Position = reader.ReadU8();
+        return value;
+    }
+}
+
+public partial struct UnequipItem : IWireMessage<UnequipItem>
+{
+    public const ushort Id = 108;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<UnequipItem>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<UnequipItem>.Delivery => Delivery.ReliableOrdered;
+
+    public byte Slot;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Slot);
+    }
+
+    public static UnequipItem Read(ref WireReader reader)
+    {
+        var value = default(UnequipItem);
+        value.Slot = reader.ReadU8();
+        return value;
+    }
+}
+
+public partial struct DiscardItem : IWireMessage<DiscardItem>
+{
+    public const ushort Id = 109;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<DiscardItem>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<DiscardItem>.Delivery => Delivery.ReliableOrdered;
+
+    public byte Position;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Position);
+    }
+
+    public static DiscardItem Read(ref WireReader reader)
+    {
+        var value = default(DiscardItem);
+        value.Position = reader.ReadU8();
         return value;
     }
 }
@@ -721,6 +796,113 @@ public partial struct CharacterSheet : IWireMessage<CharacterSheet>
     }
 }
 
+public partial struct CarriedItem : IWireStruct<CarriedItem>
+{
+    public byte Position;
+
+    public uint TemplateId;
+
+    public ushort Ql;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Position);
+        writer.WriteU32(TemplateId);
+        writer.WriteU16(Ql);
+    }
+
+    public static CarriedItem Read(ref WireReader reader)
+    {
+        var value = default(CarriedItem);
+        value.Position = reader.ReadU8();
+        value.TemplateId = reader.ReadU32();
+        value.Ql = reader.ReadU16();
+        return value;
+    }
+}
+
+public partial struct WornItem : IWireStruct<WornItem>
+{
+    public byte Slot;
+
+    public uint TemplateId;
+
+    public ushort Ql;
+
+    public bool Active;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Slot);
+        writer.WriteU32(TemplateId);
+        writer.WriteU16(Ql);
+        writer.WriteBool(Active);
+    }
+
+    public static WornItem Read(ref WireReader reader)
+    {
+        var value = default(WornItem);
+        value.Slot = reader.ReadU8();
+        value.TemplateId = reader.ReadU32();
+        value.Ql = reader.ReadU16();
+        value.Active = reader.ReadBool();
+        return value;
+    }
+}
+
+public partial struct InventoryState : IWireMessage<InventoryState>
+{
+    public const ushort Id = 214;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<InventoryState>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<InventoryState>.Delivery => Delivery.ReliableOrdered;
+
+    public byte Size;
+
+    public CarriedItem[]? Carried;
+
+    public WornItem[]? Worn;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU8(Size);
+        var carriedItems = Carried ?? [];
+        writer.WriteCount(carriedItems.Length, 120);
+        foreach (var item in carriedItems)
+        {
+            item.Write(ref writer);
+        }
+        var wornItems = Worn ?? [];
+        writer.WriteCount(wornItems.Length, 32);
+        foreach (var item in wornItems)
+        {
+            item.Write(ref writer);
+        }
+    }
+
+    public static InventoryState Read(ref WireReader reader)
+    {
+        var value = default(InventoryState);
+        value.Size = reader.ReadU8();
+        var carriedCount = reader.ReadCount(120);
+        value.Carried = new CarriedItem[carriedCount];
+        for (var i = 0; i < carriedCount; i++)
+        {
+            value.Carried[i] = CarriedItem.Read(ref reader);
+        }
+        var wornCount = reader.ReadCount(32);
+        value.Worn = new WornItem[wornCount];
+        for (var i = 0; i < wornCount; i++)
+        {
+            value.Worn[i] = WornItem.Read(ref reader);
+        }
+        return value;
+    }
+}
+
 public partial struct XpGained : IWireMessage<XpGained>
 {
     public const ushort Id = 212;
@@ -952,6 +1134,12 @@ public interface IServerBoundHandler<in TContext>
     void OnSnapshotAck(TContext context, in SnapshotAck message);
 
     void OnTrainSkill(TContext context, in TrainSkill message);
+
+    void OnEquipItem(TContext context, in EquipItem message);
+
+    void OnUnequipItem(TContext context, in UnequipItem message);
+
+    void OnDiscardItem(TContext context, in DiscardItem message);
 }
 
 /// <summary>Receives ClientBound messages from <see cref="WireDispatch"/>.</summary>
@@ -978,6 +1166,8 @@ public interface IClientBoundHandler<in TContext>
     void OnDeltaSnapshot(TContext context, in DeltaSnapshot message);
 
     void OnCharacterSheet(TContext context, in CharacterSheet message);
+
+    void OnInventoryState(TContext context, in InventoryState message);
 
     void OnXpGained(TContext context, in XpGained message);
 
@@ -1059,6 +1249,27 @@ public static class WireDispatch
                 var message = TrainSkill.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnTrainSkill(context, message);
+                return id;
+            }
+            case EquipItem.Id:
+            {
+                var message = EquipItem.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnEquipItem(context, message);
+                return id;
+            }
+            case UnequipItem.Id:
+            {
+                var message = UnequipItem.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnUnequipItem(context, message);
+                return id;
+            }
+            case DiscardItem.Id:
+            {
+                var message = DiscardItem.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnDiscardItem(context, message);
                 return id;
             }
             default:
@@ -1149,6 +1360,13 @@ public static class WireDispatch
                 var message = CharacterSheet.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnCharacterSheet(context, message);
+                return id;
+            }
+            case InventoryState.Id:
+            {
+                var message = InventoryState.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnInventoryState(context, message);
                 return id;
             }
             case XpGained.Id:

@@ -1,6 +1,7 @@
 using Meridian.Core.Characters;
 using Meridian.Core.Combat;
 using Meridian.Core.Content;
+using Meridian.Core.Items;
 using Meridian.Core.Stats;
 using Meridian.Core.World;
 using Meridian.Persistence;
@@ -23,7 +24,7 @@ public abstract class Entity
         Kind = kind;
         Name = name;
         Character = character;
-        Weapon = weapon;
+        _weapon = weapon;
         Health = character.Get(Stat.MaxHealth);
     }
 
@@ -35,7 +36,10 @@ public abstract class Entity
 
     public Character Character { get; }
 
-    public WeaponProfile Weapon { get; }
+    private readonly WeaponProfile _weapon;
+
+    /// <summary>What this entity attacks with. A player's follows its worn items.</summary>
+    public virtual WeaponProfile Weapon => _weapon;
 
     public int Level => Character.Get(Stat.Level);
 
@@ -76,13 +80,42 @@ public abstract class Entity
 /// <summary>A connected player's simulation state.</summary>
 public sealed class Player : Entity
 {
-    public Player(uint entityId, ClientRef client, CharacterRecord record, CharacterBuild build, WeaponProfile weapon)
-        : base(entityId, EntityKind.Player, record.Name, build.Character, weapon)
+    private readonly WeaponProfile _unarmed;
+    private WeaponProfile? _activeWeapon;
+    private long _weaponRevision = -1;
+
+    public Player(uint entityId, ClientRef client, CharacterRecord record, CharacterBuild build, Outfit outfit, WeaponProfile unarmed)
+        : base(entityId, EntityKind.Player, record.Name, build.Character, unarmed)
     {
         Client = client;
         Record = record;
         Build = build;
+        Outfit = outfit;
+        _unarmed = unarmed;
     }
+
+    /// <summary>Inventory and worn items.</summary>
+    public Outfit Outfit { get; }
+
+    /// <summary>The active worn weapon, or bare hands when none is worn or the worn one is inactive.</summary>
+    public override WeaponProfile Weapon
+    {
+        get
+        {
+            if (_weaponRevision != Outfit.Revision)
+            {
+                _activeWeapon = Outfit.ActiveWeapon ?? _unarmed;
+                _weaponRevision = Outfit.Revision;
+            }
+            return _activeWeapon!;
+        }
+    }
+
+    /// <summary>The outfit revision last sent as <c>InventoryState</c>; -1 forces a send.</summary>
+    internal long LastSentOutfitRevision { get; set; } = -1;
+
+    /// <summary>The stats revision worn items were last re-checked against.</summary>
+    internal long LastCheckedStatsRevision { get; set; } = -1;
 
     /// <summary>The stored character as loaded: identity and the version saves are made against.</summary>
     public CharacterRecord Record { get; }
@@ -91,7 +124,7 @@ public sealed class Player : Entity
     public ulong CharacterId => Record.Id;
 
     /// <summary>What a save would capture; when it differs from <see cref="LastSavedKey"/> a checkpoint is due.</summary>
-    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health);
+    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health, Outfit.Revision);
 
     internal SaveKey LastSavedKey { get; set; }
 
@@ -120,7 +153,7 @@ public sealed class Player : Entity
 }
 
 /// <summary>What <c>SelfStatus</c> last told the player, to send only changes.</summary>
-internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health);
+internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health, long OutfitRevision);
 
 internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead, int RunSpeed);
 

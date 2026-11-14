@@ -24,7 +24,12 @@ using var sigterm = System.Runtime.InteropServices.PosixSignalRegistration.Creat
     });
 
 var store = GameStores.FromEnvironment(Environment.GetEnvironmentVariable, Console.Out);
-using var host = new ZoneHost(new ZoneHostOptions { Port = port, InternalKey = key }, store);
+var devCommands = Environment.GetEnvironmentVariable("MERIDIAN_DEV_COMMANDS") == "1";
+if (devCommands)
+{
+    Console.Error.WriteLine("WARNING: development commands (/give) are enabled; never on a public server.");
+}
+using var host = new ZoneHost(new ZoneHostOptions { Port = port, InternalKey = key, Zone = new ZoneOptions { DevCommands = devCommands } }, store);
 host.Start();
 host.Run(cts.Token);
 Console.WriteLine("zone stopped");

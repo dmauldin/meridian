@@ -57,7 +57,7 @@ internal sealed class StoreModel
         {
             return (null, CreateCharacterError.TooManyCharacters);
         }
-        var created = draft with { Id = ++_lastCharacterId, Version = 1, Trained = [.. draft.Trained] };
+        var created = draft with { Id = ++_lastCharacterId, Version = 1, Trained = [.. draft.Trained], Items = [.. draft.Items] };
         AddCharacter(created);
         return (created, CreateCharacterError.None);
     }
@@ -87,6 +87,7 @@ internal sealed class StoreModel
                 UnspentPoints = r.UnspentPoints,
                 Trained = [.. r.Trained],
                 Placement = r.Placement,
+                Items = [.. r.Items],
                 Version = stored.Version + 1,
             };
             _characters[r.Id] = saved;
@@ -120,7 +121,8 @@ internal sealed class StoreModel
             c.Id, c.AccountId, c.Name, (int)c.Profession, (int)c.Origin, c.Level, c.Xp, c.UnspentPoints,
             c.Trained.ToDictionary(t => (int)t.Key, t => t.Value),
             c.Placement?.Zone, c.Placement?.Position.X, c.Placement?.Position.Z, c.Placement?.Health,
-            c.Version))]);
+            c.Version,
+            [.. c.Items.Select(i => new ItemRow((int)i.Location, i.Position, i.TemplateId, i.Ql))]))]);
 
     public static StoreModel FromFile(StoreFile file)
     {
@@ -137,7 +139,8 @@ internal sealed class StoreModel
                 c.Id, c.AccountId, c.Name, (Profession)c.Profession, (Origin)c.Origin, c.Level, c.Xp, c.UnspentPoints,
                 [.. c.Skills.OrderBy(s => s.Key).Select(s => new KeyValuePair<Stat, int>((Stat)s.Key, s.Value))],
                 placement,
-                c.Version));
+                c.Version,
+                [.. (c.Items ?? []).Select(i => new StoredItem((ItemLocation)i.Location, i.Position, i.TemplateId, i.Ql))]));
         }
         model._lastAccountId = Math.Max(model._lastAccountId, file.LastAccountId);
         model._lastCharacterId = Math.Max(model._lastCharacterId, file.LastCharacterId);
@@ -163,4 +166,8 @@ internal sealed record CharacterRow(
     int? X,
     int? Z,
     int? Health,
-    long Version);
+    long Version,
+    List<ItemRow>? Items);
+
+/// <summary>A row of <c>character_items</c>.</summary>
+internal sealed record ItemRow(int Location, int Position, int TemplateId, int Ql);

@@ -19,6 +19,9 @@ public sealed record EntityKilled(uint EntityId, uint KillerId) : GameEvent;
 public sealed record ChatLine(uint FromEntityId, string From, string Text) : GameEvent;
 
 /// <summary>A system message for the chat log or a banner (disconnects, respawns).</summary>
+/// <summary>The inventory or worn items changed; read <see cref="ClientWorld.Inventory"/>.</summary>
+public sealed record InventoryChanged : GameEvent;
+
 public sealed record SystemNotice(string Text) : GameEvent;
 
 /// <summary>Experience earned (and any levels gained with it).</summary>

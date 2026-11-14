@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using Meridian.Core.Combat;
 using Meridian.Core.Items;
 
 namespace Meridian.Core.Content;
@@ -54,6 +55,9 @@ public sealed class ContentPack
 
     public NewCharacterDef NewCharacter { get; }
 
+    /// <summary>The weapon used when nothing active is in hand (validated when the pack loads).</summary>
+    public WeaponProfile UnarmedWeapon => Items[NewCharacter.UnarmedKey].WeaponAt(1)!;
+
     /// <summary>Identity of this data; client and server must agree.</summary>
     public ulong Hash { get; }
 
@@ -74,6 +78,28 @@ public sealed class ContentPack
                 if (!Mobs.ContainsKey(s.MobKey))
                 {
                     throw new InvalidDataException($"zone '{z.Key}': spawn references unknown mob '{s.MobKey}'.");
+                }
+            }
+        }
+        if (!Items.TryGet(NewCharacter.UnarmedKey, out var unarmed) || unarmed.Weapon is null)
+        {
+            throw new InvalidDataException($"new_character: unarmed '{NewCharacter.UnarmedKey}' is not a weapon item.");
+        }
+        if (NewCharacter.InventorySlots is < 1 or > 120)
+        {
+            throw new InvalidDataException("new_character: inventory_slots must be 1..120.");
+        }
+        foreach (var m in Mobs.All)
+        {
+            foreach (var l in m.Loot)
+            {
+                if (!Items.ContainsKey(l.ItemKey))
+                {
+                    throw new InvalidDataException($"mob '{m.Key}': loot references unknown item '{l.ItemKey}'.");
+                }
+                if (l.ChanceBp is < 1 or > 10_000 || l.QlSpread is < 0 or > QlCurve.MaxQl)
+                {
+                    throw new InvalidDataException($"mob '{m.Key}': loot '{l.ItemKey}' needs chance 1..10000 bp and a spread 0..{QlCurve.MaxQl}.");
                 }
             }
         }

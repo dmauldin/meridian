@@ -28,4 +28,8 @@ Rules:
   `starting_weapon` is the kit weapon.
 - `origins.yaml`: starting attributes, attribute cost tiers and `bonus_points_per_level`.
   Attributes are priced only by origin, never by profession.
-- `mobs`: `xp` is what each player on the mob's threat list earns when it dies.
+- `mobs`: `xp` is what each player on the mob's threat list earns when it dies. `loot` lists
+  possible drops, each rolled on its own: `item` (key), `chance` (basis points, 1..10000) and
+  `ql_spread` (QL = mob level plus or minus this, clamped to the item's range).
+- `new_character.yaml`: `unarmed` is the weapon item used when no active weapon is worn;
+  `inventory_slots` is how many items a character carries besides what it wears.

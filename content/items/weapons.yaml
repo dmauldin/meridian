@@ -1,4 +1,21 @@
 # Weapons. A weapon is an item with a `weapon` block.
+
+# What a character fights with when no active weapon is in hand (new_character.yaml `unarmed`).
+- id: 1000
+  key: unarmed.fists
+  name: Fists
+  slot: MainHand
+  ql: [1, 1]
+  weapon:
+    attack_skill: Unarmed
+    initiative: MeleeInit
+    defence: EvadeClose
+    damage_type: Melee
+    attack_time_ms: 1600
+    range_m: 2
+    min_damage: { 1: 2 }
+    max_damage: { 1: 6 }
+
 - id: 1001
   key: rifle.combine_carbine
   name: Combine Issue Carbine

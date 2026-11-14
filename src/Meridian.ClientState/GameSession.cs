@@ -1,3 +1,5 @@
+using Meridian.Content;
+using Meridian.Core.Items;
 using Meridian.Net.Client;
 using Meridian.Wire;
 
@@ -111,8 +113,10 @@ public sealed class GameSession : IDisposable
     }
 
     /// <summary>
-    /// Chat commands until the real UI exists (M2.5): <c>/train Rifle 10</c>. Returns false if
-    /// the line is not a command. <paramref name="feedback"/> is a message for the player, if any.
+    /// Chat commands until the real UI exists (M2.5). Returns false if the line is not a local
+    /// command: plain chat, or a slash command for the server (such as the development
+    /// <c>/give</c>), which is sent as chat and never broadcast. <paramref name="feedback"/> is a
+    /// message for the player, if any.
     /// </summary>
     public bool TryCommand(string line, out string? feedback)
     {
@@ -131,8 +135,73 @@ public sealed class GameSession : IDisposable
             Train(stat, points);
             return true;
         }
-        feedback = "Commands: /train <Stat> <points>   e.g. /train Rifle 10";
-        return true;
+        switch (ParseItemCommand(line))
+        {
+            case (ItemCommand.List, _):
+                feedback = DescribeInventory(World.Inventory);
+                return true;
+            case (ItemCommand.Equip, var position):
+                Connection.Send(new EquipItem { Position = (byte)position });
+                return true;
+            case (ItemCommand.Unequip, var slot):
+                Connection.Send(new UnequipItem { Slot = (byte)slot });
+                return true;
+            case (ItemCommand.Discard, var position):
+                Connection.Send(new DiscardItem { Position = (byte)position });
+                return true;
+            case (ItemCommand.Help, _):
+                feedback = "Commands: /train <Stat> <points>, /inv, /equip <#>, /unequip <slot>, /discard <#>";
+                return true;
+            default:
+                return false; // the server's to answer
+        }
+    }
+
+    public enum ItemCommand
+    {
+        None,
+        Help,
+        List,
+        Equip,
+        Unequip,
+        Discard,
+    }
+
+    /// <summary>Parses the item commands. The argument is an inventory position, or a slot id for unequip (by name, any case).</summary>
+    public static (ItemCommand Command, int Argument) ParseItemCommand(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts switch
+        {
+            ["/help"] or ["/?"] => (ItemCommand.Help, 0),
+            ["/inv"] or ["/inventory"] => (ItemCommand.List, 0),
+            ["/equip", var n] when Position(n) is { } p => (ItemCommand.Equip, p),
+            ["/discard", var n] when Position(n) is { } p => (ItemCommand.Discard, p),
+            ["/unequip", var name] when !char.IsDigit(name[0]) && Enum.TryParse<EquipSlot>(name, ignoreCase: true, out var slot) && Enum.IsDefined(slot)
+                => (ItemCommand.Unequip, (int)slot),
+            ["/train", ..] or ["/equip", ..] or ["/discard", ..] or ["/unequip", ..] => (ItemCommand.Help, 0),
+            _ => (ItemCommand.None, 0),
+        };
+
+        static int? Position(string text) =>
+            int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var p) && p <= byte.MaxValue ? p : null;
+    }
+
+    /// <summary>One line per item: "#3 Kestrel Mk2 QL 3" and worn items with their state.</summary>
+    public static string DescribeInventory(ClientInventory? inventory)
+    {
+        if (inventory is null)
+        {
+            return "Inventory not received yet.";
+        }
+        var pack = ContentPacks.Embedded;
+        string Name(OwnedItem i) => pack.Items.TryGet(i.TemplateId, out var t) ? $"{t.Name} QL {i.Ql}" : $"item {i.TemplateId}";
+        var lines = new List<string> { $"Carrying {inventory.Carried.Count}/{inventory.Size}:" };
+        lines.AddRange(inventory.Carried.Select(c => $"  #{c.Position} {Name(c.Item)}"));
+        lines.Add("Worn:");
+        lines.AddRange(inventory.Worn.Select(w => $"  {w.Slot}: {Name(w.Item)}{(w.Active ? "" : " (inactive)")}"));
+        return string.Join('\n', lines);
     }
 
     /// <summary>Parses <c>/train &lt;Stat&gt; &lt;points&gt;</c>; stat names are case-insensitive, numbers are not stats.</summary>

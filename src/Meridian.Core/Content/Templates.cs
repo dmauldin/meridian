@@ -142,7 +142,8 @@ public sealed record MobDef(
     int LeashMm,
     int SpeedMmPerSecond,
     int RespawnMs,
-    int Xp)
+    int Xp,
+    IReadOnlyList<LootDef> Loot)
 {
     public void ApplyStats(StatBlock block)
     {
@@ -161,4 +162,15 @@ public sealed record SpawnGroup(string MobKey, int Count, Position Center, int I
 public sealed record ZoneDef(uint Id, string Key, string Name, ZoneBounds Bounds, IReadOnlyList<SpawnGroup> Spawns);
 
 /// <summary>Stats every new character starts with, before origin and profession add theirs.</summary>
-public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats);
+/// <param name="Stats">Common starting stats (origin and profession are applied on top).</param>
+/// <param name="UnarmedKey">The weapon item used when no active weapon is worn.</param>
+/// <param name="InventorySlots">How many items a character can carry besides what it wears.</param>
+public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats, string UnarmedKey, int InventorySlots);
+
+/// <summary>
+/// One possible drop. Each entry rolls on its own when the mob dies. The QL is the mob's level
+/// plus or minus <paramref name="QlSpread"/>, clamped to the item's range (the design doc's
+/// "loot drops at a QL near the mob's level").
+/// </summary>
+/// <param name="ChanceBp">Chance in basis points, 1..10000.</param>
+public sealed record LootDef(string ItemKey, int ChanceBp, int QlSpread);

@@ -1,5 +1,11 @@
 # Stats every new character starts with. The origin then sets attributes, and the
 # profession adds its starting skills and weapon.
+
+# Used when no active weapon is in hand (none worn, or the worn one is inactive).
+unarmed: unarmed.fists
+# Inventory positions besides what is worn.
+inventory_slots: 30
+
 stats:
   Level: 1
   RunSpeed: 5000   # mm/s

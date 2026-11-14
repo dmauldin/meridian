@@ -148,6 +148,10 @@ public class ValidationTests : IDisposable
     [InlineData("professions.yaml", "profession: Medic", "profession: Healer", "not a valid Profession")]
     [InlineData("origins.yaml", "attribute_costs: { Intellect: cheap", "attribute_costs: { Rifle: cheap, Intellect: cheap", "is not an attribute")]
     [InlineData("progression.yaml", "max_level: 30", "max_level: 900", "max_level must be")]
+    [InlineData("new_character.yaml", "unarmed: unarmed.fists", "unarmed: armor.marksman_gloves", "is not a weapon item")]
+    [InlineData("new_character.yaml", "inventory_slots: 30", "inventory_slots: 0", "inventory_slots must be")]
+    [InlineData("mobs/creatures.yaml", "item: rifle.kestrel_mk2", "item: rifle.kestrel_mk3", "unknown item")]
+    [InlineData("mobs/creatures.yaml", "chance: 500", "chance: 20000", "chance 1..10000")]
     [InlineData("progression.yaml", "expensive: { cost_per_point: 4", "expensive: { cost_per_point: 0", "positive cost and cap")]
     public void Each_rule_catches_its_mistake(string file, string find, string replace, string expected)
     {

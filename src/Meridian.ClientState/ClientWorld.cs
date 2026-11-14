@@ -1,5 +1,6 @@
 using Meridian.Core.Characters;
 using Meridian.Core.Content;
+using Meridian.Core.Items;
 using Meridian.Core.Stats;
 using Meridian.Core.World;
 using Meridian.Net.Client;
@@ -48,6 +49,9 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
     /// the server uses, so the UI can show exact costs and caps. Null until the first sheet.
     /// </summary>
     public CharacterBuild? Build { get; private set; }
+
+    /// <summary>The player's items as the server last sent them; null until the first update.</summary>
+    public ClientInventory? Inventory { get; private set; }
 
     /// <summary>Effective stat values from the latest sheet (base values live in <see cref="Build"/>).</summary>
     public IReadOnlyDictionary<Stat, int> EffectiveStats => _effective;
@@ -235,6 +239,15 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
 
     public void OnNotice(GameConnection context, in Notice message) =>
         _events.Add(new SystemNotice(message.Text ?? ""));
+
+    public void OnInventoryState(GameConnection context, in InventoryState message)
+    {
+        Inventory = new ClientInventory(
+            message.Size,
+            [.. (message.Carried ?? []).Select(c => (Position: (int)c.Position, Item: new OwnedItem((int)c.TemplateId, c.Ql)))],
+            [.. (message.Worn ?? []).Select(w => (Slot: (EquipSlot)w.Slot, Item: new OwnedItem((int)w.TemplateId, w.Ql), w.Active))]);
+        _events.Add(new InventoryChanged());
+    }
 
     public void OnDisconnecting(GameConnection context, in Disconnecting message) =>
         _events.Add(new SystemNotice(message.Reason ?? "Disconnected."));

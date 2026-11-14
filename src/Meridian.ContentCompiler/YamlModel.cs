@@ -146,6 +146,19 @@ internal sealed class MobYaml
     public double RespawnSeconds { get; set; }
 
     public int Xp { get; set; }
+
+    public List<LootYaml> Loot { get; set; } = [];
+}
+
+internal sealed class LootYaml
+{
+    public string Item { get; set; } = "";
+
+    /// <summary>Basis points: 2500 = 25%.</summary>
+    public int Chance { get; set; }
+
+    [YamlMember(Alias = "ql_spread")]
+    public int QlSpread { get; set; }
 }
 
 internal sealed class BoundsYaml
@@ -210,6 +223,11 @@ internal sealed class StartingWeaponYaml
 internal sealed class NewCharacterYaml
 {
     public Dictionary<string, int> Stats { get; set; } = [];
+
+    public string Unarmed { get; set; } = "";
+
+    [YamlMember(Alias = "inventory_slots")]
+    public int InventorySlots { get; set; }
 }
 
 internal sealed class ProfessionYaml

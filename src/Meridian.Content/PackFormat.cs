@@ -85,7 +85,10 @@ public sealed record MobDto(
     int LeashMm,
     int SpeedMmPerSecond,
     int RespawnMs,
-    int Xp);
+    int Xp,
+    List<LootDto> Loot);
+
+public sealed record LootDto(string Item, int ChanceBp, int QlSpread);
 
 public sealed record BoundsDto(int MinX, int MinZ, int MaxX, int MaxZ);
 
@@ -93,7 +96,7 @@ public sealed record SpawnDto(string MobKey, int Count, int CenterX, int CenterZ
 
 public sealed record ZoneDto(uint Id, string Key, string Name, BoundsDto Bounds, List<SpawnDto> Spawns);
 
-public sealed record NewCharacterDto(SortedDictionary<string, int> Stats);
+public sealed record NewCharacterDto(SortedDictionary<string, int> Stats, string Unarmed, int InventorySlots);
 
 public sealed record ProfessionDto(
     int Id,

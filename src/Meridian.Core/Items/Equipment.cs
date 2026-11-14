@@ -75,10 +75,46 @@ public sealed class Equipment
 
     public bool IsActive(EquipSlot slot) => _worn.TryGetValue(slot, out var w) && w.Active;
 
+    public EquippableItem? In(EquipSlot slot) => _worn.TryGetValue(slot, out var w) ? w.Item : null;
+
+    /// <summary>
+    /// Worn slots an item for <paramref name="slot"/> would displace: the slot itself, and the
+    /// hands for a two-handed item (or the two-hander for a one-handed item).
+    /// </summary>
+    public IReadOnlyList<EquipSlot> Conflicts(EquipSlot slot)
+    {
+        var conflicts = new List<EquipSlot>(2);
+        foreach (var worn in _worn.Keys)
+        {
+            if (worn == slot || IsHandConflict(slot, worn))
+            {
+                conflicts.Add(worn);
+            }
+        }
+        return conflicts;
+    }
+
+    /// <summary>
+    /// Wears an item without checking its requirement, then settles every item. Used to restore
+    /// saved equipment: an item twinked with a buff that has since gone comes back worn but
+    /// inactive, rather than being refused. The slot (and any conflict) must be free.
+    /// </summary>
+    public void Wear(EquippableItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (Conflicts(item.Slot).Count > 0)
+        {
+            throw new InvalidOperationException($"{item.Slot} is occupied.");
+        }
+        _worn.Add(item.Slot, new Worn(item) { Active = true });
+        _owner.Stats.AddEffects(item.Effects, item.Source);
+        Reevaluate();
+    }
+
     public EquipResult TryEquip(EquippableItem item, List<RequirementFailure>? failures = null)
     {
         ArgumentNullException.ThrowIfNull(item);
-        if (_worn.ContainsKey(item.Slot))
+        if (Conflicts(item.Slot).Count > 0)
         {
             return EquipResult.SlotOccupied;
         }
@@ -145,6 +181,10 @@ public sealed class Equipment
         }
         return changes;
     }
+
+    private static bool IsHandConflict(EquipSlot a, EquipSlot b) =>
+        (a == EquipSlot.TwoHand && b is EquipSlot.MainHand or EquipSlot.OffHand)
+        || (b == EquipSlot.TwoHand && a is EquipSlot.MainHand or EquipSlot.OffHand);
 
     private sealed class Worn(EquippableItem item)
     {

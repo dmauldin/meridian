@@ -249,6 +249,11 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     {
     }
 
+    public void OnInventoryState(GameConnection context, in InventoryState message) => Items = message.Carried?.Length ?? 0;
+
+    /// <summary>Items carried, as the last inventory update said (loot shows up here).</summary>
+    public int Items { get; private set; }
+
     public void Dispose() => Connection.Dispose();
 
     private uint ElapsedMs(long now) => (uint)((now - _startTimestamp) * 1000 / Stopwatch.Frequency);

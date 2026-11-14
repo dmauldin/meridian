@@ -154,6 +154,12 @@ public class HostileInputTests
         public void OnSnapshotAck(int context, in SnapshotAck message) => Calls.Add($"ack {message.Tick}");
 
         public void OnTrainSkill(int context, in TrainSkill message) => Calls.Add($"train {message.Stat} {message.Points}");
+
+        public void OnEquipItem(int context, in EquipItem message) => Calls.Add($"equip {message.Position}");
+
+        public void OnUnequipItem(int context, in UnequipItem message) => Calls.Add($"unequip {message.Slot}");
+
+        public void OnDiscardItem(int context, in DiscardItem message) => Calls.Add($"discard {message.Position}");
     }
 
     [Fact]

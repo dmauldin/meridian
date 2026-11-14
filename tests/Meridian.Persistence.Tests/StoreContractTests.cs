@@ -105,6 +105,29 @@ public abstract class StoreContractTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_character_wears_its_kit_weapon()
+    {
+        var a = await Account();
+        var rook = (await Store.CreateCharacterAsync(Draft(a.Id, "Rook", Profession.Warden), 8, Ct)).Created!;
+        var kit = Pack.Items[Pack.Professions[(int)Profession.Warden].StartingWeaponKey];
+        Assert.Equal([new StoredItem(ItemLocation.Worn, (int)kit.Slot, kit.Id, Pack.Professions[(int)Profession.Warden].StartingWeaponQl)],
+            (await Store.LoadCharacterAsync(rook.Id, Ct))!.Items);
+    }
+
+    [Fact]
+    public async Task A_save_replaces_the_characters_items()
+    {
+        var a = await Account();
+        var rook = (await Store.CreateCharacterAsync(Draft(a.Id, "Rook"), 8, Ct)).Created!;
+        StoredItem[] items = [new(ItemLocation.Inventory, 4, 2001, 17), new(ItemLocation.Worn, 13, 2001, 3)];
+        await Store.SaveCharactersAsync([rook with { Items = items }], Ct);
+        Assert.Equal(items, (await OpenAgain().LoadCharacterAsync(rook.Id, Ct))!.Items);
+
+        await Store.SaveCharactersAsync([rook with { Version = 2, Items = [] }], Ct);
+        Assert.Empty((await Store.LoadCharacterAsync(rook.Id, Ct))!.Items);
+    }
+
+    [Fact]
     public async Task A_save_never_changes_identity()
     {
         var a = await Account();

@@ -347,6 +347,19 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         public void OnTrainSkill(int context, in TrainSkill message)
         {
         }
+
+        // Positions and slots are bounded by their u8 fields; the zone checks they exist.
+        public void OnEquipItem(int context, in EquipItem message)
+        {
+        }
+
+        public void OnUnequipItem(int context, in UnequipItem message)
+        {
+        }
+
+        public void OnDiscardItem(int context, in DiscardItem message)
+        {
+        }
     }
 }
 

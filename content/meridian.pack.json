@@ -2,6 +2,37 @@
   "format": 1,
   "items": [
     {
+      "id": 1000,
+      "key": "unarmed.fists",
+      "name": "Fists",
+      "slot": "MainHand",
+      "minQl": 1,
+      "maxQl": 1,
+      "requirements": [],
+      "professions": [],
+      "effects": [],
+      "weapon": {
+        "attackSkill": "Unarmed",
+        "initiative": "MeleeInit",
+        "defence": "EvadeClose",
+        "damageType": "Melee",
+        "attackTimeMs": 1600,
+        "rangeMm": 2000,
+        "minDamage": [
+          {
+            "ql": 1,
+            "value": 2
+          }
+        ],
+        "maxDamage": [
+          {
+            "ql": 1,
+            "value": 6
+          }
+        ]
+      }
+    },
+    {
       "id": 1001,
       "key": "rifle.combine_carbine",
       "name": "Combine Issue Carbine",
@@ -495,7 +526,24 @@
       "leashMm": 40000,
       "speedMmPerSecond": 4000,
       "respawnMs": 10000,
-      "xp": 120
+      "xp": 120,
+      "loot": [
+        {
+          "item": "armor.marksman_gloves",
+          "chanceBp": 1500,
+          "qlSpread": 2
+        },
+        {
+          "item": "implant.ocular_reflex",
+          "chanceBp": 1000,
+          "qlSpread": 2
+        },
+        {
+          "item": "rifle.kestrel_mk2",
+          "chanceBp": 500,
+          "qlSpread": 2
+        }
+      ]
     }
   ],
   "zones": [
@@ -703,6 +751,8 @@
       "RangedInit": 10,
       "Rifle": 20,
       "RunSpeed": 5000
-    }
+    },
+    "unarmed": "unarmed.fists",
+    "inventorySlots": 30
   }
 }

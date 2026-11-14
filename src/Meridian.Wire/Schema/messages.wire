@@ -64,6 +64,19 @@ message 106 TrainSkill server_bound reliable_ordered
   u16 points
 end
 
+# Inventory positions and slots are checked by the zone; the client only asks.
+message 107 EquipItem server_bound reliable_ordered
+  u8 position
+end
+
+message 108 UnequipItem server_bound reliable_ordered
+  u8 slot
+end
+
+message 109 DiscardItem server_bound reliable_ordered
+  u8 position
+end
+
 # ---------------------------------------------------------------- server → client
 
 # contentHash identifies the server's content pack; a client with different data must not play.
@@ -173,6 +186,28 @@ message 211 CharacterSheet client_bound reliable_ordered
   u32 xpToNext
   i32 unspentPoints
   list<StatValue>(96) stats
+end
+
+struct CarriedItem
+  u8 position
+  u32 templateId
+  u16 ql
+end
+
+struct WornItem
+  u8 slot
+  u32 templateId
+  u16 ql
+  bool active
+end
+
+# The receiving player's inventory and worn items, sent on join and whenever either changes
+# (including an item turning inactive or active). Names, requirements and bonuses come from
+# the client's content pack by template id.
+message 214 InventoryState client_bound reliable_ordered
+  u8 size
+  list<CarriedItem>(120) carried
+  list<WornItem>(32) worn
 end
 
 message 212 XpGained client_bound reliable_ordered

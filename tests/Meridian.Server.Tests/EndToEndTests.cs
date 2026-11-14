@@ -167,7 +167,8 @@ public sealed class EndToEndTests : IDisposable
         var again = new TestClient();
         using var back = new GameConnection(again);
         back.Connect("127.0.0.1", _gateway.Port, Play("keeper"));
-        Pump(back, () => again.Sheet is not null, "sheet after relog");
+        Pump(back, () => again.Sheet is not null && again.Inventory is not null, "sheet and inventory after relog");
+        Assert.Contains(again.Inventory!.Value.Worn!, w => w.TemplateId == (uint)Meridian.Content.ContentPacks.Embedded.Items["rifle.combine_carbine"].Id && w.Active);
         Assert.Equal(trained.UnspentPoints, again.Sheet!.Value.UnspentPoints);
         Assert.Equal(Stat(trained, Meridian.Core.Stats.Stat.Rifle), Stat(again.Sheet.Value, Meridian.Core.Stats.Stat.Rifle));
         Assert.InRange(again.Welcome!.Value.X, x - 1_000, x + 1_000);
@@ -397,5 +398,9 @@ public sealed class EndToEndTests : IDisposable
         public void OnXpGained(GameConnection context, in XpGained message) => Experience.Add(message);
 
         public void OnNotice(GameConnection context, in Notice message) => Notices.Add(message.Text ?? "");
+
+        public InventoryState? Inventory { get; private set; }
+
+        public void OnInventoryState(GameConnection context, in InventoryState message) => Inventory = message;
     }
 }
