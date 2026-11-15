@@ -86,6 +86,28 @@ public sealed class GameSession : IDisposable
 
     public void SetAttack(bool enabled) => Connection.Send(new SetAttack { Enabled = enabled });
 
+    public void Equip(int position) => Connection.Send(new EquipItem { Position = (byte)position });
+
+    public void Unequip(EquipSlot slot) => Connection.Send(new UnequipItem { Slot = (byte)slot });
+
+    public void Discard(int position) => Connection.Send(new DiscardItem { Position = (byte)position });
+
+    public void Upload(int position) => Connection.Send(new UploadProtocol { Position = (byte)position });
+
+    public void CancelProtocol(int protocolId) => Connection.Send(new CancelProtocol { ProtocolId = (uint)protocolId });
+
+    /// <summary>
+    /// Casts on the current target if it is a player (and <paramref name="onSelf"/> is false),
+    /// otherwise on yourself. Self-only Protocols always go on yourself. The server checks the rest.
+    /// </summary>
+    public void Cast(int protocolId, bool onSelf = false)
+    {
+        var selfOnly = ContentPacks.Embedded.Protocols.TryGet(protocolId, out var p) && p.Target == Meridian.Core.Content.ProtocolTarget.Self;
+        var targetIsPlayer = World.Entities.TryGetValue(World.Status.TargetId, out var t) && t.Description?.Kind == EntityDescription.KindPlayer;
+        var target = onSelf || selfOnly || !targetIsPlayer ? 0u : World.Status.TargetId;
+        Connection.Send(new CastProtocol { ProtocolId = (uint)protocolId, TargetId = target });
+    }
+
     /// <summary>Raises <paramref name="stat"/> by <paramref name="points"/> (the server checks cost and cap).</summary>
     public void Train(Meridian.Core.Stats.Stat stat, int points) =>
         Connection.Send(new TrainSkill { Stat = (ushort)stat, Points = (ushort)Math.Clamp(points, 0, ushort.MaxValue) });
@@ -145,13 +167,13 @@ public sealed class GameSession : IDisposable
                 feedback = DescribeInventory(World.Inventory);
                 return true;
             case (ItemCommand.Equip, var position):
-                Connection.Send(new EquipItem { Position = (byte)position });
+                Equip(position);
                 return true;
             case (ItemCommand.Unequip, var slot):
-                Connection.Send(new UnequipItem { Slot = (byte)slot });
+                Unequip((EquipSlot)slot);
                 return true;
             case (ItemCommand.Discard, var position):
-                Connection.Send(new DiscardItem { Position = (byte)position });
+                Discard(position);
                 return true;
             case (ItemCommand.Help, _):
                 feedback = "Commands: /train <Stat> <points>, /inv, /equip <#>, /unequip <slot>, /discard <#>, "
@@ -172,7 +194,7 @@ public sealed class GameSession : IDisposable
                 feedback = DescribeProtocols(World.Protocols, World.Status.Energy, World.Status.MaxEnergy);
                 return true;
             case ["/upload", var n] when int.TryParse(n, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var position) && position <= byte.MaxValue:
-                Connection.Send(new UploadProtocol { Position = (byte)position });
+                Upload(position);
                 return true;
             case ["/cast", var name, .. var rest] when rest.Length <= 1:
                 if (FindProtocol(name) is not { } cast)
@@ -180,10 +202,7 @@ public sealed class GameSession : IDisposable
                     feedback = $"No Protocol called '{name}'. /protocols lists yours.";
                     return true;
                 }
-                // Your current target if it is a player (and you did not say "me"), else yourself.
-                var target = rest is ["me"] ? 0u
-                    : World.Entities.TryGetValue(World.Status.TargetId, out var t) && t.Description?.Kind == EntityDescription.KindPlayer ? World.Status.TargetId : 0u;
-                Connection.Send(new CastProtocol { ProtocolId = (uint)cast.Id, TargetId = target });
+                Cast(cast.Id, onSelf: rest is ["me"]);
                 return true;
             case ["/cancel", var name]:
                 if (FindProtocol(name) is not { } running)
@@ -191,7 +210,7 @@ public sealed class GameSession : IDisposable
                     feedback = $"No Protocol called '{name}'.";
                     return true;
                 }
-                Connection.Send(new CancelProtocol { ProtocolId = (uint)running.Id });
+                CancelProtocol(running.Id);
                 return true;
             case ["/cast" or "/upload" or "/cancel", ..]:
                 feedback = "Usage: /cast <protocol> [me], /upload <#>, /cancel <protocol>";

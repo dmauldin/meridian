@@ -53,6 +53,9 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
     /// <summary>The player's lattice as the server last sent it; null until the first update.</summary>
     public ClientProtocols? Protocols { get; private set; }
 
+    /// <summary><see cref="NowMs"/> when <see cref="Protocols"/> arrived, for counting buff timers down.</summary>
+    public double ProtocolsReceivedMs { get; private set; }
+
     /// <summary>The player's items as the server last sent them; null until the first update.</summary>
     public ClientInventory? Inventory { get; private set; }
 
@@ -235,6 +238,7 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
         {
             Build = CharacterBuild.Restore(pack, profession, origin, message.Level, message.Xp, message.UnspentPoints, bases);
         }
+        _events.Add(new CharacterChanged());
     }
 
     public void OnXpGained(GameConnection context, in XpGained message) =>
@@ -250,6 +254,7 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
             [.. (message.Running ?? []).Select(r => (ProtocolId: (int)r.ProtocolId, RemainingMs: (int)r.RemainingMs))],
             message.LatticeUsed,
             message.LatticeCapacity);
+        ProtocolsReceivedMs = NowMs;
         _events.Add(new ProtocolsChanged());
     }
 
