@@ -215,4 +215,15 @@ public class WeaponFormulaTests
             Assert.EndsWith("AC", Formulas.ArmorFor(t).ToString(), StringComparison.Ordinal);
         }
     }
+
+    // Golden values: changing Formulas.EnergyRegenBpPerSecond must change these.
+    [Theory]
+    [InlineData(125, 50, 125)]     // a fresh level-1 character: 2.5 energy per second at 20 Hz
+    [InlineData(1_000, 50, 1_000)]
+    [InlineData(0, 50, 0)]
+    [InlineData(-5, 50, 0)]
+    public void Energy_regenerates_two_percent_of_maximum_per_second(int max, int tickMs, long milliPerTick)
+    {
+        Assert.Equal(milliPerTick, Formulas.EnergyRegenMilliPerTick(max, tickMs));
+    }
 }

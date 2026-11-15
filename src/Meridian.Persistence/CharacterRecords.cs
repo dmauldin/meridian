@@ -16,7 +16,8 @@ public static class CharacterRecords
         var build = CharacterBuild.Create(pack, profession, origin);
         var kit = pack.Items[build.Profession.StartingWeaponKey];
         StoredItem[] items = [new(ItemLocation.Worn, (int)kit.Slot, kit.Id, kit.ClampQl(build.Profession.StartingWeaponQl))];
-        return new CharacterRecord(0, accountId, name, profession, origin, build.Level, build.Xp, build.UnspentPoints, build.Trained(), null, 0, items);
+        int[] known = [.. build.Profession.StartingProtocols.Select(k => pack.Protocols[k].Id).Order()];
+        return new CharacterRecord(0, accountId, name, profession, origin, build.Level, build.Xp, build.UnspentPoints, build.Trained(), null, 0, items, known, []);
     }
 
     /// <summary>Fills <paramref name="outfit"/> from the record. Returns what it could not place (see <see cref="Outfit.Load"/>).</summary>
@@ -55,8 +56,10 @@ public static class CharacterRecords
         return CharacterBuild.Load(pack, record.Profession, record.Origin, record.Level, record.Xp, record.UnspentPoints, record.Trained);
     }
 
-    /// <summary>The record with progression from <paramref name="build"/>, the given placement and items; identity and version unchanged.</summary>
-    public static CharacterRecord WithProgress(this CharacterRecord record, CharacterBuild build, Placement placement, IReadOnlyList<StoredItem> items)
+    /// <summary>The record with new progression, placement, items and Protocols; identity and version unchanged.</summary>
+    public static CharacterRecord WithProgress(
+        this CharacterRecord record, CharacterBuild build, Placement placement, IReadOnlyList<StoredItem> items,
+        IReadOnlyList<int> knownProtocols, IReadOnlyList<SavedBuff> buffs)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(build);
@@ -68,6 +71,8 @@ public static class CharacterRecords
             Trained = build.Trained(),
             Placement = placement,
             Items = items,
+            KnownProtocols = knownProtocols,
+            Buffs = buffs,
         };
     }
 }

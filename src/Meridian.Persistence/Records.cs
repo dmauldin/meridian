@@ -20,6 +20,8 @@ public sealed record Placement(string Zone, Position Position, int Health);
 /// <param name="Trained">Points raised above starting value per trainable stat (see <c>CharacterBuild.Trained</c>).</param>
 /// <param name="Placement">Null until a zone first places the character.</param>
 /// <param name="Items">Everything carried and worn.</param>
+/// <param name="KnownProtocols">Protocol ids the character has learned, ascending.</param>
+/// <param name="Buffs">Protocols running on the character, with their remaining time.</param>
 /// <param name="Version">Optimistic-concurrency version; a save must name the version it read.</param>
 public sealed record CharacterRecord(
     ulong Id,
@@ -33,7 +35,12 @@ public sealed record CharacterRecord(
     IReadOnlyList<KeyValuePair<Stat, int>> Trained,
     Placement? Placement,
     long Version,
-    IReadOnlyList<StoredItem> Items);
+    IReadOnlyList<StoredItem> Items,
+    IReadOnlyList<int> KnownProtocols,
+    IReadOnlyList<SavedBuff> Buffs);
+
+/// <summary>A Protocol running on a character at save time (a row of <c>character_buffs</c>).</summary>
+public readonly record struct SavedBuff(int ProtocolId, int RemainingMs);
 
 public enum ItemLocation : byte
 {

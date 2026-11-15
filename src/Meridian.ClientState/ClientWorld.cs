@@ -50,6 +50,9 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
     /// </summary>
     public CharacterBuild? Build { get; private set; }
 
+    /// <summary>The player's lattice as the server last sent it; null until the first update.</summary>
+    public ClientProtocols? Protocols { get; private set; }
+
     /// <summary>The player's items as the server last sent them; null until the first update.</summary>
     public ClientInventory? Inventory { get; private set; }
 
@@ -239,6 +242,16 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
 
     public void OnNotice(GameConnection context, in Notice message) =>
         _events.Add(new SystemNotice(message.Text ?? ""));
+
+    public void OnProtocolState(GameConnection context, in ProtocolState message)
+    {
+        Protocols = new ClientProtocols(
+            [.. (message.Known ?? []).Select(id => (int)id)],
+            [.. (message.Running ?? []).Select(r => (ProtocolId: (int)r.ProtocolId, RemainingMs: (int)r.RemainingMs))],
+            message.LatticeUsed,
+            message.LatticeCapacity);
+        _events.Add(new ProtocolsChanged());
+    }
 
     public void OnInventoryState(GameConnection context, in InventoryState message)
     {

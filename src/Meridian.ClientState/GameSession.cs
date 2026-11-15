@@ -135,6 +135,10 @@ public sealed class GameSession : IDisposable
             Train(stat, points);
             return true;
         }
+        if (TryProtocolCommand(line, out feedback))
+        {
+            return true;
+        }
         switch (ParseItemCommand(line))
         {
             case (ItemCommand.List, _):
@@ -150,11 +154,80 @@ public sealed class GameSession : IDisposable
                 Connection.Send(new DiscardItem { Position = (byte)position });
                 return true;
             case (ItemCommand.Help, _):
-                feedback = "Commands: /train <Stat> <points>, /inv, /equip <#>, /unequip <slot>, /discard <#>";
+                feedback = "Commands: /train <Stat> <points>, /inv, /equip <#>, /unequip <slot>, /discard <#>, "
+                    + "/protocols, /cast <protocol> [me], /upload <#>, /cancel <protocol>";
                 return true;
             default:
                 return false; // the server's to answer
         }
+    }
+
+    private bool TryProtocolCommand(string line, out string? feedback)
+    {
+        feedback = null;
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        switch (parts)
+        {
+            case ["/protocols"]:
+                feedback = DescribeProtocols(World.Protocols, World.Status.Energy, World.Status.MaxEnergy);
+                return true;
+            case ["/upload", var n] when int.TryParse(n, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var position) && position <= byte.MaxValue:
+                Connection.Send(new UploadProtocol { Position = (byte)position });
+                return true;
+            case ["/cast", var name, .. var rest] when rest.Length <= 1:
+                if (FindProtocol(name) is not { } cast)
+                {
+                    feedback = $"No Protocol called '{name}'. /protocols lists yours.";
+                    return true;
+                }
+                // Your current target if it is a player (and you did not say "me"), else yourself.
+                var target = rest is ["me"] ? 0u
+                    : World.Entities.TryGetValue(World.Status.TargetId, out var t) && t.Description?.Kind == EntityDescription.KindPlayer ? World.Status.TargetId : 0u;
+                Connection.Send(new CastProtocol { ProtocolId = (uint)cast.Id, TargetId = target });
+                return true;
+            case ["/cancel", var name]:
+                if (FindProtocol(name) is not { } running)
+                {
+                    feedback = $"No Protocol called '{name}'.";
+                    return true;
+                }
+                Connection.Send(new CancelProtocol { ProtocolId = (uint)running.Id });
+                return true;
+            case ["/cast" or "/upload" or "/cancel", ..]:
+                feedback = "Usage: /cast <protocol> [me], /upload <#>, /cancel <protocol>";
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Finds a Protocol by key (with or without "buff."), case-insensitive.</summary>
+    public static Meridian.Core.Content.ProtocolTemplate? FindProtocol(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var pack = ContentPacks.Embedded;
+        var key = name.ToLowerInvariant();
+        return pack.Protocols.TryGet(key, out var exact) ? exact
+            : pack.Protocols.TryGet("buff." + key, out var buff) ? buff
+            : null;
+    }
+
+    /// <summary>"Known: Rifle Enhancement I (10 energy) ... Running: Reflex Boost I, 9:52 left".</summary>
+    public static string DescribeProtocols(ClientProtocols? protocols, int energy, int maxEnergy)
+    {
+        if (protocols is null)
+        {
+            return "Protocols not received yet.";
+        }
+        var pack = ContentPacks.Embedded;
+        string Name(int id) => pack.Protocols.TryGet(id, out var p) ? p.Name : $"protocol {id}";
+        var lines = new List<string> { $"Energy {energy}/{maxEnergy}, lattice {protocols.LatticeUsed}/{protocols.LatticeCapacity}. Known:" };
+        lines.AddRange(protocols.Known.Select(id => pack.Protocols.TryGet(id, out var p)
+            ? $"  {p.Key.Replace("buff.", "", StringComparison.Ordinal)}: {p.Name} ({p.EnergyCost} energy, {p.Target})"
+            : $"  {Name(id)}"));
+        lines.Add("Running on you:");
+        lines.AddRange(protocols.Running.Select(r => $"  {Name(r.ProtocolId)}, {r.RemainingMs / 60_000}:{r.RemainingMs / 1000 % 60:D2} left"));
+        return string.Join('\n', lines);
     }
 
     public enum ItemCommand

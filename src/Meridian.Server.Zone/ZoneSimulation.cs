@@ -2,9 +2,10 @@ using Meridian.Content;
 using Meridian.Core.Characters;
 using Meridian.Core.Combat;
 using Meridian.Core.Content;
-using Meridian.Core.Stats;
-using Meridian.Core.Randomness;
 using Meridian.Core.Items;
+using Meridian.Core.Protocols;
+using Meridian.Core.Randomness;
+using Meridian.Core.Stats;
 using Meridian.Core.World;
 using Meridian.Persistence;
 using Meridian.Wire;
@@ -175,6 +176,16 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         {
             return null;
         }
+        // Buffs go back on before items load, so an item twinked with a saved buff stays active.
+        var lattice = new Lattice(_content, build.Character, _options.TickMs);
+        foreach (var id in record.KnownProtocols.Concat(build.Profession.StartingProtocols.Select(k => _content.Protocols[k].Id)))
+        {
+            lattice.Learn(id); // starting Protocols too, so characters saved before Protocols existed get them
+        }
+        foreach (var buff in record.Buffs)
+        {
+            lattice.Restore(buff.ProtocolId, buff.RemainingMs, Tick);
+        }
         var outfit = new Outfit(_content, build.Character, _content.NewCharacter.InventorySlots);
         if (record.Items.Count == 0)
         {
@@ -182,7 +193,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             record = record with { Items = CharacterRecords.New(_content, record.AccountId, record.Name, record.Profession, record.Origin).Items };
         }
         var skipped = record.LoadItems(outfit);
-        var player = new Player(_nextEntityId++, client, record, build, outfit, _content.UnarmedWeapon);
+        var player = new Player(_nextEntityId++, client, record, build, outfit, lattice, _content.UnarmedWeapon);
         if (record.Placement is { Health: > 0 } saved && saved.Zone == _zone.Key)
         {
             player.Position = saved.Position;
@@ -216,6 +227,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         SendStatusIfChanged(player);
         SendSheetIfChanged(player);
         SendInventoryIfChanged(player);
+        SendProtocolsIfChanged(player);
         if (skipped.Count > 0)
         {
             // Content removed or reshaped an item since the save: say so rather than vanish it silently.
@@ -232,7 +244,12 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
     {
         ArgumentNullException.ThrowIfNull(player);
         var health = player.Dead ? 0 : player.Health;
-        return player.Record.WithProgress(player.Build, new Placement(_zone.Key, player.Position, health), CharacterRecords.ItemsOf(player.Outfit));
+        return player.Record.WithProgress(
+            player.Build,
+            new Placement(_zone.Key, player.Position, health),
+            CharacterRecords.ItemsOf(player.Outfit),
+            [.. player.Lattice.Known],
+            [.. player.Lattice.RunningWithRemaining(Tick).Select(r => new SavedBuff(r.ProtocolId, r.RemainingMs))]);
     }
 
     /// <summary>
@@ -323,7 +340,9 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
         foreach (var p in _players)
         {
+            TickLattice(p);   // expiry first: a buff running out can turn a twinked item off this tick
             SettleItems(p);
+            SendProtocolsIfChanged(p);
             SendInventoryIfChanged(p);
             SendStatusIfChanged(p);
             SendSheetIfChanged(p);
@@ -454,7 +473,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
     private void SendStatusIfChanged(Player p)
     {
-        var key = new SelfStatusKey(p.Health, p.MaxHealth, p.TargetId, p.Attacking, p.Dead, p.CurrentSpeed);
+        var key = new SelfStatusKey(p.Health, p.MaxHealth, p.TargetId, p.Attacking, p.Dead, p.CurrentSpeed, p.Lattice.Energy, p.Lattice.MaxEnergy);
         if (p.LastSentStatus == key)
         {
             return;
@@ -468,6 +487,8 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             Attacking = p.Attacking,
             Dead = p.Dead,
             RunSpeed = p.CurrentSpeed,
+            Energy = p.Lattice.Energy,
+            MaxEnergy = p.Lattice.MaxEnergy,
         });
     }
 

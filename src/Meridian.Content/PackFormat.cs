@@ -43,7 +43,8 @@ public sealed record ItemDto(
     List<RequirementDto> Requirements,
     List<string> Professions,
     List<ScaledEffectDto> Effects,
-    WeaponDto? Weapon);
+    WeaponDto? Weapon,
+    string? Protocol = null);
 
 public sealed record LineDto(int Id, string Key, string Name);
 
@@ -61,7 +62,8 @@ public sealed record ProtocolDto(
     string Target,
     List<string> Professions,
     SortedDictionary<string, int> Requirements,
-    List<FlatEffectDto> Effects);
+    List<FlatEffectDto> Effects,
+    int RangeMm);
 
 public sealed record AttackDto(
     string Name,
@@ -106,7 +108,8 @@ public sealed record ProfessionDto(
     SortedDictionary<string, string> SkillTiers,
     SortedDictionary<string, int> StartingSkills,
     string StartingWeapon,
-    int StartingWeaponQl);
+    int StartingWeaponQl,
+    List<string> StartingProtocols);
 
 public sealed record OriginDto(
     int Id,

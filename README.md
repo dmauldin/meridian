@@ -50,6 +50,7 @@ tests/                      xunit v3 on Microsoft.Testing.Platform.
 db/                         Postgres schema migrations and their checks. See db/README.md.
 scripts/m0-gate.sh          Builds, starts the stack, runs bots, checks the gate.
 scripts/db-check.sh         Applies the migrations to a throwaway database and checks them.
+scripts/m2-gate.sh          M2 gate: twink a rifle with another player's buff (two clients).
 deploy/                     Dockerfile and docker-compose for the server stack.
 ```
 
@@ -68,6 +69,7 @@ dotnet run --project src/Meridian.ContentCompiler   # after editing anything in 
 scripts/m0-gate.sh 100 60                      # load test: bots, seconds
 scripts/m0-gate.sh 100 60 hunt                 # same, with bots fighting mobs
 scripts/db-check.sh                            # migrations against a throwaway Postgres
+scripts/m2-gate.sh                             # M2 gate: two clients, one buffs the other
 ```
 
 Run the stack by hand, each in its own terminal (development keys are used and a warning
@@ -210,11 +212,40 @@ interpolate between the template's QL anchors. The rules are `Outfit` in `Meridi
 - **Development**: with `MERIDIAN_DEV_COMMANDS=1` the zone accepts `/give <item key> <ql>`
   (and warns at start). There is no permission model yet, so never on a public server.
 
+## Protocols (M2)
+
+Protocols are the game's buffs (and later nukes, heals and debuffs). The rules are `Lattice`
+in `Meridian.Core`: the Protocols a character knows, its energy, and what runs on it.
+
+- **Learning**: each profession starts knowing some (`starting_protocols` in content); more
+  come from Protocol items, uploaded with `/upload <#>`. Uploading needs the Protocol's cast
+  requirements and consumes the item.
+- **Casting** (`CastProtocol`, `/cast <protocol> [me]`) on yourself or another player in range.
+  Checks, in order: known, target allowed (some are self-only), alive, range, the caster's
+  requirements, energy; then the target's line and lattice-capacity rules. Energy is spent only
+  when it lands. Casts are instant for now.
+- **Lines**: only the strongest Protocol of a line runs on a target; recasting the same one
+  renews it; a weaker one is refused.
+- **Energy** regenerates at `Formulas.EnergyRegenBpPerSecond` (2% of maximum per second) and is
+  full on login. It travels in `SelfStatus`.
+- **Ending**: Protocols expire, can be dropped with `/cancel <protocol>`, and all end on death.
+  Worn items are re-checked the same tick, so a rifle twinked with someone's buff goes inactive
+  the moment the buff ends.
+- **Saving**: known Protocols and running buffs (with their remaining time) are saved with the
+  character (`character_protocols`, `character_buffs`). On load buffs go back on before items,
+  so a twink held by a saved buff still holds.
+
+The M2 gate, `scripts/m2-gate.sh`, plays this through the real stack with two clients: an
+Operative cannot wear a QL 1 Kestrel Mk2 on its own buff, can once a Medic's Reflex Boost
+lands, and the rifle goes inactive when that buff is dropped.
+
 ## Known limits and next steps
 
 - **The Postgres store and Argon2id are not in yet**: their packages could not be restored on
   the build machine. The schema, migration runner and checks are done; the development file
   store stands in and is not meant for production.
+- **Casts are instant** and there is no Protocol initiative or cast bar yet; energy is not saved
+  (full on login).
 - **Items have no ids yet**: an item is identified by where it sits. Trading (M3) adds ids.
 - **Characters with no items at all get their kit on join**, so characters created before
   items existed are not left unarmed. Discarding everything therefore brings the kit back.

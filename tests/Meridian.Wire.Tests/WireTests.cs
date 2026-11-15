@@ -160,6 +160,12 @@ public class HostileInputTests
         public void OnUnequipItem(int context, in UnequipItem message) => Calls.Add($"unequip {message.Slot}");
 
         public void OnDiscardItem(int context, in DiscardItem message) => Calls.Add($"discard {message.Position}");
+
+        public void OnUploadProtocol(int context, in UploadProtocol message) => Calls.Add($"upload {message.Position}");
+
+        public void OnCastProtocol(int context, in CastProtocol message) => Calls.Add($"cast {message.ProtocolId} on {message.TargetId}");
+
+        public void OnCancelProtocol(int context, in CancelProtocol message) => Calls.Add($"cancel {message.ProtocolId}");
     }
 
     [Fact]

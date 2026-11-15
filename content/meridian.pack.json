@@ -366,6 +366,54 @@
           ]
         }
       ]
+    },
+    {
+      "id": 6001,
+      "key": "protocol.rifle_enhancement_1",
+      "name": "Protocol: Rifle Enhancement I",
+      "slot": "None",
+      "minQl": 1,
+      "maxQl": 1,
+      "requirements": [],
+      "professions": [],
+      "effects": [],
+      "protocol": "buff.rifle_enhancement_1"
+    },
+    {
+      "id": 6002,
+      "key": "protocol.rifle_enhancement_2",
+      "name": "Protocol: Rifle Enhancement II",
+      "slot": "None",
+      "minQl": 1,
+      "maxQl": 1,
+      "requirements": [],
+      "professions": [],
+      "effects": [],
+      "protocol": "buff.rifle_enhancement_2"
+    },
+    {
+      "id": 6101,
+      "key": "protocol.reflex_boost_1",
+      "name": "Protocol: Reflex Boost I",
+      "slot": "None",
+      "minQl": 1,
+      "maxQl": 1,
+      "requirements": [],
+      "professions": [],
+      "effects": [],
+      "protocol": "buff.reflex_boost_1"
+    },
+    {
+      "id": 6201,
+      "key": "protocol.intimidating_presence",
+      "name": "Protocol: Intimidating Presence",
+      "slot": "None",
+      "minQl": 1,
+      "maxQl": 1,
+      "requirements": [],
+      "professions": [],
+      "effects": [],
+      "protocol": "buff.intimidating_presence"
     }
   ],
   "lines": [
@@ -409,7 +457,8 @@
           "kind": "Flat",
           "value": 15
         }
-      ]
+      ],
+      "rangeMm": 30000
     },
     {
       "id": 5002,
@@ -439,7 +488,8 @@
           "kind": "Flat",
           "value": 10
         }
-      ]
+      ],
+      "rangeMm": 30000
     },
     {
       "id": 5101,
@@ -468,7 +518,8 @@
           "kind": "Flat",
           "value": 10
         }
-      ]
+      ],
+      "rangeMm": 30000
     },
     {
       "id": 5201,
@@ -492,7 +543,8 @@
           "kind": "Flat",
           "value": 5000
         }
-      ]
+      ],
+      "rangeMm": 30000
     }
   ],
   "mobs": [
@@ -592,7 +644,10 @@
         "Parry": 10
       },
       "startingWeapon": "blunt.shock_maul",
-      "startingWeaponQl": 1
+      "startingWeaponQl": 1,
+      "startingProtocols": [
+        "buff.intimidating_presence"
+      ]
     },
     {
       "id": 2,
@@ -612,7 +667,10 @@
         "Treatment": 10
       },
       "startingWeapon": "rifle.combine_carbine",
-      "startingWeaponQl": 1
+      "startingWeaponQl": 1,
+      "startingProtocols": [
+        "buff.reflex_boost_1"
+      ]
     },
     {
       "id": 7,
@@ -634,7 +692,10 @@
         "Rifle": 10
       },
       "startingWeapon": "rifle.combine_carbine",
-      "startingWeaponQl": 1
+      "startingWeaponQl": 1,
+      "startingProtocols": [
+        "buff.rifle_enhancement_1"
+      ]
     },
     {
       "id": 13,
@@ -656,7 +717,8 @@
         "Pistol": 15
       },
       "startingWeapon": "pistol.combine_sidearm",
-      "startingWeaponQl": 1
+      "startingWeaponQl": 1,
+      "startingProtocols": []
     }
   ],
   "origins": [

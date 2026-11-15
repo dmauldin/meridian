@@ -115,7 +115,8 @@ public static class ContentPacks
             d.Weapon is { } w
                 ? new WeaponTemplate(Parse<Stat>(w.AttackSkill, where), Parse<Stat>(w.Initiative, where), Parse<Stat>(w.Defence, where),
                     Parse<DamageType>(w.DamageType, where), w.AttackTimeMs, w.RangeMm, Curve(w.MinDamage, where), Curve(w.MaxDamage, where))
-                : null);
+                : null,
+            d.Protocol);
     }
 
     /// <summary>Validates and converts one Protocol.</summary>
@@ -127,7 +128,8 @@ public static class ContentPacks
             Parse<ProtocolTarget>(d.Target, where),
             d.Professions.Select(p => Parse<Profession>(p, where)).ToList(),
             Stats(d.Requirements, where),
-            d.Effects.Select(e => new StatEffect(Parse<Stat>(e.Stat, where), Parse<ModifierKind>(e.Kind, where), e.Value)).ToList());
+            d.Effects.Select(e => new StatEffect(Parse<Stat>(e.Stat, where), Parse<ModifierKind>(e.Kind, where), e.Value)).ToList(),
+            d.RangeMm);
     }
 
     /// <summary>Validates and converts one mob.</summary>
@@ -157,7 +159,8 @@ public static class ContentPacks
             d.GroupTiers.ToDictionary(kv => Parse<SkillGroup>(kv.Key, where), kv => Parse<CostTier>(kv.Value, where)),
             d.SkillTiers.ToDictionary(kv => Parse<Stat>(kv.Key, where), kv => Parse<CostTier>(kv.Value, where)),
             Stats(d.StartingSkills, where),
-            d.StartingWeapon, d.StartingWeaponQl);
+            d.StartingWeapon, d.StartingWeaponQl,
+            d.StartingProtocols ?? []);
     }
 
     /// <summary>Validates and converts one origin.</summary>
@@ -198,13 +201,15 @@ public static class ContentPacks
         t.Weapon is { } w
             ? new WeaponDto(w.AttackSkill.ToString(), w.InitiativeSkill.ToString(), w.DefenceSkill.ToString(), w.DamageType.ToString(),
                 w.AttackTimeMs, w.RangeMm, Anchors(w.MinDamage), Anchors(w.MaxDamage))
-            : null);
+            : null,
+        t.ProtocolKey);
 
     private static ProtocolDto ToDto(ProtocolTemplate p) => new(
         p.Id, p.Key, p.Name, p.LineId, p.Strength, p.LatticeCost, p.EnergyCost, p.DurationMs, p.Target.ToString(),
         p.Professions.Select(x => x.ToString()).ToList(),
         Sorted(p.Requirements),
-        p.Effects.Select(e => new FlatEffectDto(e.Stat.ToString(), e.Kind.ToString(), e.Value)).ToList());
+        p.Effects.Select(e => new FlatEffectDto(e.Stat.ToString(), e.Kind.ToString(), e.Value)).ToList(),
+        p.RangeMm);
 
     private static MobDto ToDto(MobDef m)
     {
@@ -220,7 +225,7 @@ public static class ContentPacks
     private static ProfessionDto ToDto(ProfessionDef p) => new(
         (int)p.Id, p.Key, p.Name,
         SortedNames(p.GroupTiers), SortedNames(p.SkillTiers), Sorted(p.StartingSkills),
-        p.StartingWeaponKey, p.StartingWeaponQl);
+        p.StartingWeaponKey, p.StartingWeaponQl, [.. p.StartingProtocols]);
 
     private static OriginDto ToDto(OriginDef o) => new(
         (int)o.Id, o.Key, o.Name, Sorted(o.Attributes), SortedNames(o.AttributeTiers), o.BonusPointsPerLevel);

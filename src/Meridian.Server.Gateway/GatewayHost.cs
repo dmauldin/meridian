@@ -360,6 +360,18 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         public void OnDiscardItem(int context, in DiscardItem message)
         {
         }
+
+        public void OnUploadProtocol(int context, in UploadProtocol message)
+        {
+        }
+
+        public void OnCastProtocol(int context, in CastProtocol message)
+        {
+        }
+
+        public void OnCancelProtocol(int context, in CancelProtocol message)
+        {
+        }
     }
 }
 

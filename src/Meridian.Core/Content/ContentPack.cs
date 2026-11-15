@@ -103,6 +103,34 @@ public sealed class ContentPack
                 }
             }
         }
+        foreach (var item in Items.All)
+        {
+            if (item.IsProtocol != (item.Slot == EquipSlot.None))
+            {
+                throw new InvalidDataException($"item '{item.Key}': an item has a slot or a protocol, never both or neither.");
+            }
+            if (item.ProtocolKey is { } key && !Protocols.ContainsKey(key))
+            {
+                throw new InvalidDataException($"item '{item.Key}': unknown protocol '{key}'.");
+            }
+        }
+        foreach (var p in Protocols.All)
+        {
+            if (p.RangeMm is < 1_000 or > 100_000)
+            {
+                throw new InvalidDataException($"protocol '{p.Key}': range_m must be 1..100.");
+            }
+        }
+        foreach (var p in Professions.All)
+        {
+            foreach (var key in p.StartingProtocols)
+            {
+                if (!Protocols.TryGet(key, out var proto) || (proto.Professions.Count > 0 && !proto.Professions.Contains(p.Id)))
+                {
+                    throw new InvalidDataException($"profession '{p.Key}': starting protocol '{key}' is unknown or not castable by it.");
+                }
+            }
+        }
         foreach (var p in Professions.All)
         {
             if (!Items.TryGet(p.StartingWeaponKey, out var weapon) || weapon.Weapon is null)

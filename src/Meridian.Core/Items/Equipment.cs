@@ -7,6 +7,8 @@ namespace Meridian.Core.Items;
 /// <summary>Where an item is worn. Implant slots are listed separately from gear.</summary>
 public enum EquipSlot : byte
 {
+    /// <summary>Not wearable (for example a Protocol to upload).</summary>
+    None = 0,
     MainHand = 1,
     OffHand = 2,
     TwoHand = 3,

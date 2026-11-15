@@ -4,8 +4,9 @@ using Meridian.Bots;
 using Meridian.Net.Client;
 
 // Usage: Meridian.Bots [--count 100] [--duration 60] [--auth http://127.0.0.1:5080/] [--password botpassword]
-//                      [--min-snapshot-hz 8] [--hunt]
+//                      [--min-snapshot-hz 8] [--hunt] [--twink-gate]
 //   --hunt  bots target the nearest mob, close in and auto-attack (combat load).
+//   --twink-gate  run the M2 gate scenario instead (see TwinkGate.cs).
 // Exit code 0 when every bot connected and received snapshots at the required rate.
 var count = IntArg("--count", 100);
 var durationSeconds = IntArg("--duration", 60);
@@ -13,6 +14,13 @@ var minSnapshotHz = IntArg("--min-snapshot-hz", 8);
 var authUrl = StringArg("--auth", "http://127.0.0.1:5080/");
 var password = StringArg("--password", "botpassword");
 var hunt = args.Contains("--hunt");
+
+if (args.Contains("--twink-gate"))
+{
+    // The M2 gate: two clients, one buffing the other; see TwinkGate.
+    using var gateHttp = new HttpClient { BaseAddress = new Uri(authUrl), Timeout = TimeSpan.FromSeconds(20) };
+    return await Meridian.Bots.TwinkGate.RunAsync(gateHttp, password, TimeSpan.FromSeconds(30));
+}
 
 using var http = new HttpClient { BaseAddress = new Uri(authUrl) };
 var auth = new AuthClient(http);

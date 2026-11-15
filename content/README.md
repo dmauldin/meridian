@@ -31,5 +31,10 @@ Rules:
 - `mobs`: `xp` is what each player on the mob's threat list earns when it dies. `loot` lists
   possible drops, each rolled on its own: `item` (key), `chance` (basis points, 1..10000) and
   `ql_spread` (QL = mob level plus or minus this, clamped to the item's range).
+- `protocols/buffs.yaml`: `range_m` is how far the target may be from the caster (1-100);
+  `requirements` and `professions` gate both casting and uploading.
+- `items/protocols.yaml`: Protocol items have `protocol:` (the Protocol key) and no `slot`.
+- `professions.yaml`: `starting_protocols` lists Protocol keys every new character of that
+  profession knows; each must be castable by the profession.
 - `new_character.yaml`: `unarmed` is the weapon item used when no active weapon is worn;
   `inventory_slots` is how many items a character carries besides what it wears.

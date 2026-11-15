@@ -57,7 +57,7 @@ internal sealed class StoreModel
         {
             return (null, CreateCharacterError.TooManyCharacters);
         }
-        var created = draft with { Id = ++_lastCharacterId, Version = 1, Trained = [.. draft.Trained], Items = [.. draft.Items] };
+        var created = draft with { Id = ++_lastCharacterId, Version = 1, Trained = [.. draft.Trained], Items = [.. draft.Items], KnownProtocols = [.. draft.KnownProtocols.Order()], Buffs = [.. draft.Buffs] };
         AddCharacter(created);
         return (created, CreateCharacterError.None);
     }
@@ -88,6 +88,8 @@ internal sealed class StoreModel
                 Trained = [.. r.Trained],
                 Placement = r.Placement,
                 Items = [.. r.Items],
+                KnownProtocols = [.. r.KnownProtocols.Distinct().Order()],
+                Buffs = [.. r.Buffs.Where(b => b.RemainingMs > 0)],
                 Version = stored.Version + 1,
             };
             _characters[r.Id] = saved;
@@ -122,7 +124,9 @@ internal sealed class StoreModel
             c.Trained.ToDictionary(t => (int)t.Key, t => t.Value),
             c.Placement?.Zone, c.Placement?.Position.X, c.Placement?.Position.Z, c.Placement?.Health,
             c.Version,
-            [.. c.Items.Select(i => new ItemRow((int)i.Location, i.Position, i.TemplateId, i.Ql))]))]);
+            [.. c.Items.Select(i => new ItemRow((int)i.Location, i.Position, i.TemplateId, i.Ql))],
+            [.. c.KnownProtocols],
+            [.. c.Buffs.Select(b => new BuffRow(b.ProtocolId, b.RemainingMs))]))]);
 
     public static StoreModel FromFile(StoreFile file)
     {
@@ -140,7 +144,9 @@ internal sealed class StoreModel
                 [.. c.Skills.OrderBy(s => s.Key).Select(s => new KeyValuePair<Stat, int>((Stat)s.Key, s.Value))],
                 placement,
                 c.Version,
-                [.. (c.Items ?? []).Select(i => new StoredItem((ItemLocation)i.Location, i.Position, i.TemplateId, i.Ql))]));
+                [.. (c.Items ?? []).Select(i => new StoredItem((ItemLocation)i.Location, i.Position, i.TemplateId, i.Ql))],
+                [.. c.Protocols ?? []],
+                [.. (c.Buffs ?? []).Select(b => new SavedBuff(b.ProtocolId, b.RemainingMs))]));
         }
         model._lastAccountId = Math.Max(model._lastAccountId, file.LastAccountId);
         model._lastCharacterId = Math.Max(model._lastCharacterId, file.LastCharacterId);
@@ -167,7 +173,12 @@ internal sealed record CharacterRow(
     int? Z,
     int? Health,
     long Version,
-    List<ItemRow>? Items);
+    List<ItemRow>? Items,
+    List<int>? Protocols,
+    List<BuffRow>? Buffs);
+
+/// <summary>A row of <c>character_buffs</c>.</summary>
+internal sealed record BuffRow(int ProtocolId, int RemainingMs);
 
 /// <summary>A row of <c>character_items</c>.</summary>
 internal sealed record ItemRow(int Location, int Position, int TemplateId, int Ql);

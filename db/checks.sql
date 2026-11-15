@@ -36,11 +36,17 @@ SELECT pg_temp.expect_error($q$INSERT INTO character_items SELECT id, 2, 3, 1002
 SELECT pg_temp.expect_error($q$INSERT INTO character_items SELECT id, 3, 0, 1001, 1 FROM characters WHERE name = 'Rook'$q$, '23514');  -- location
 SELECT pg_temp.expect_error($q$INSERT INTO character_items SELECT id, 1, 0, 1001, 301 FROM characters WHERE name = 'Rook'$q$, '23514'); -- ql
 
+INSERT INTO character_protocols SELECT id, 5001 FROM characters WHERE name = 'Rook';
+SELECT pg_temp.expect_error($q$INSERT INTO character_protocols SELECT id, 5001 FROM characters WHERE name = 'Rook'$q$, '23505');
+INSERT INTO character_buffs SELECT id, 5101, 30000 FROM characters WHERE name = 'Rook';
+SELECT pg_temp.expect_error($q$INSERT INTO character_buffs SELECT id, 5001, 0 FROM characters WHERE name = 'Rook'$q$, '23514'); -- expired buffs are not saved
+
 -- Deleting an account deletes its characters.
 DELETE FROM accounts WHERE username = 'Alice';
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM characters) THEN RAISE EXCEPTION 'characters should cascade'; END IF;
   IF EXISTS (SELECT 1 FROM character_items) THEN RAISE EXCEPTION 'items should cascade'; END IF;
+  IF EXISTS (SELECT 1 FROM character_protocols UNION ALL SELECT 1 FROM character_buffs) THEN RAISE EXCEPTION 'protocols should cascade'; END IF;
 END $$;
 ROLLBACK;
 
