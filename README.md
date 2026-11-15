@@ -101,8 +101,12 @@ could not pull base images).
    machine you both reach and set `MERIDIAN_PUBLIC_GATEWAY_HOST` on auth to its address.
 
 Controls: WASD move, right-drag to look, wheel to zoom, Tab or left-click to target,
-Q toggles auto-attack, Esc clears the target, Enter chats. `/train Rifle 10` spends skill
-points (a proper training window arrives in M2.5).
+Q toggles auto-attack, Esc clears the target, Enter chats. C opens the character window
+(train skills with +1/+5), I the inventory (click an item for its requirements against your
+stats, then Equip, Unequip, Upload or Discard), and 1-9 cast the Protocols on the bar along the
+bottom: on your target if it is a player, otherwise on yourself. Running buffs show under your
+health and energy; right-click one to drop it. The chat commands (`/train`, `/inv`, `/cast`
+and so on, `/help` lists them) still work.
 
 Headless autoplay (what the M1 gate uses):
 `godot --headless --path client -- --autopilot --user Ann --pass autopilot1 --timeout 120`
@@ -207,7 +211,7 @@ interpolate between the template's QL anchors. The rules are `Outfit` in `Meridi
   QL), written with the character in one transaction. A saved twinked item comes back worn but
   inactive if its twink is gone.
 - **Messages**: `EquipItem`, `UnequipItem`, `DiscardItem` (intents); `InventoryState` (sent on
-  join and on any change). Until the inventory window (M2.5) use `/inv`, `/equip <#>`,
+  join and on any change). The inventory window (I) or `/inv`, `/equip <#>`,
   `/unequip <slot>`, `/discard <#>` in chat.
 - **Development**: with `MERIDIAN_DEV_COMMANDS=1` the zone accepts `/give <item key> <ql>`
   (and warns at start). There is no permission model yet, so never on a public server.
@@ -238,6 +242,18 @@ in `Meridian.Core`: the Protocols a character knows, its energy, and what runs o
 The M2 gate, `scripts/m2-gate.sh`, plays this through the real stack with two clients: an
 Operative cannot wear a QL 1 Kestrel Mk2 on its own buff, can once a Medic's Reflex Boost
 lands, and the rifle goes inactive when that buff is dropped.
+
+## Client UI (M2)
+
+Windows are built in code (`client/src/Ui/`) until there is real UI art. What they show comes
+from small view models in `Meridian.ClientState/Views` (stat rows, item details with
+requirements checked against your current stats, Protocol buttons, buff countdowns), which are
+unit tested; the Godot classes only lay them out. Every button calls the same `GameSession`
+method as its chat command, and the server decides: windows refresh when its answer arrives.
+
+The autopilot's `--show-ui` opens the windows, casts a Protocol and presses a real train button;
+the M1 gate runs one client that way and requires the server to confirm the point was spent.
+With a display (or `xvfb-run`) and `--screenshot`, it also saves a frame of the UI.
 
 ## Known limits and next steps
 
