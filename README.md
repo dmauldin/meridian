@@ -51,6 +51,7 @@ tests/                      xunit v3 on Microsoft.Testing.Platform.
 db/                         Postgres schema migrations and their checks. See db/README.md.
 scripts/m0-gate.sh          Builds, starts the stack, runs bots, checks the gate.
 scripts/db-check.sh         Applies the migrations to a throwaway database and checks them.
+scripts/db-test.sh          The Postgres store's tests, then the M2 gate, on a throwaway database.
 scripts/m2-gate.sh          M2 gate: twink a rifle with another player's buff and carry it into
                             another zone (two clients, two zones).
 deploy/                     Dockerfile and docker-compose for the server stack.
@@ -71,6 +72,7 @@ dotnet run --project src/Meridian.ContentCompiler   # after editing anything in 
 scripts/m0-gate.sh 100 60                      # load test: bots, seconds
 scripts/m0-gate.sh 100 60 hunt                 # same, with bots fighting mobs
 scripts/db-check.sh                            # migrations against a throwaway Postgres
+scripts/db-test.sh                             # Postgres store tests + M2 gate on Postgres
 scripts/m2-gate.sh                             # M2 gate: two clients, two zones
 ```
 
@@ -95,10 +97,18 @@ MERIDIAN_ZONE_KEY=rustfall_basin  MERIDIAN_ZONE_PORT=7801 dotnet run --project s
 MERIDIAN_ZONES="1@127.0.0.1:7800,2@127.0.0.1:7801" dotnet run --project src/Meridian.Server.Gateway
 ```
 
-Or with Docker: copy `deploy/.env.example` to `deploy/.env`, set real keys, then
+To use Postgres instead of the file, migrate a database and point every service at it:
+
+```bash
+scripts/db-migrate.sh postgres://user:pass@localhost:5432/meridian
+export MERIDIAN_STORE=postgres MERIDIAN_DATABASE_URL=postgres://user:pass@localhost:5432/meridian
+```
+
+Or with Docker, which runs Postgres, the migrations, both zones, the gateway and auth: copy
+`deploy/.env.example` to `deploy/.env`, set real keys and a database password, then
 `docker compose -f deploy/docker-compose.yml up --build`.
-The compose file has been syntax-checked but not yet run end to end (the build machine
-could not pull base images).
+The compose file passes `docker compose config` but has not been run end to end (the build
+machine cannot pull images from Docker Hub).
 
 ## Playing the client (Windows)
 
@@ -169,9 +179,15 @@ respawn at their spawn point; dead players respawn at a spawn point after 5 s at
   unknown user costs the same as a wrong password. At most one hash per core runs at once
   (each holds its 64 MiB), so a burst of logins queues instead of exhausting memory. Load tests
   lower the cost with `MERIDIAN_ARGON2_MEMORY_KIB` and `MERIDIAN_ARGON2_PASSES` (auth warns).
-- **Stores** (`MERIDIAN_STORE`): `file` (default; one JSON file auth and zone share through a
-  lock file and atomic replace) or `memory` (one process, tests). The Postgres store implements
-  the same contract against `db/migrations`; its contract tests are the ones the other stores pass.
+- **Stores** (`MERIDIAN_STORE`): `postgres` (production; `MERIDIAN_DATABASE_URL` as a
+  `postgres://` URL, libpq `host=... dbname=...` or an Npgsql string), `file` (default; one
+  JSON file auth and zone share through a lock file and atomic replace) or `memory` (one
+  process, tests). All three pass the same contract tests (`scripts/db-test.sh` runs them for
+  Postgres, then the M2 gate on it; CI does both).
+- **Postgres**: every character write is one transaction (the character row with its items,
+  Protocols and buffs), and a save that names a stale version changes nothing. A service
+  refuses to start on a database older than its newest migration; services never migrate,
+  `scripts/db-migrate.sh` does.
 - **What is saved**: level, XP, unspent points, how far each skill was trained above its
   starting value (so content changes to starting values reach existing characters), and zone,
   position and health. Identity (account, name, profession, origin) is fixed at creation; a
@@ -310,8 +326,8 @@ With a display (or `xvfb-run`) and `--screenshot`, it also saves a frame of the 
 
 ## Known limits and next steps
 
-- **The Postgres store is not in yet**: the schema, migration runner and checks are done; the
-  development file store stands in and is not meant for production.
+- **Saves are one transaction per character**, about three round trips each; the write-behind
+  batches are small today. Batching several characters per transaction comes when load says so.
 - **Casts are instant** and there is no Protocol initiative or cast bar yet; energy is not saved
   (full on login).
 - **Items have no ids yet**: an item is identified by where it sits. Trading (M3) adds ids.
