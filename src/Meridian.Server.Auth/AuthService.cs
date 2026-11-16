@@ -24,6 +24,12 @@ public sealed record AuthOptions
     public int MinPasswordLength { get; init; } = 8;
 
     public int MaxCharactersPerAccount { get; init; } = 8;
+
+    /// <summary>
+    /// Password hashes computed at once, across all requests. Each holds the hasher's memory
+    /// (64 MiB by default) while it runs, so this caps that memory; the rest queue.
+    /// </summary>
+    public int MaxConcurrentHashes { get; init; } = Environment.ProcessorCount;
 }
 
 /// <summary>Either a value or an HTTP status with an error body.</summary>
@@ -40,11 +46,14 @@ public static class AuthResult
 /// Accounts, logins, characters and gateway tickets. Thread-safe: ASP.NET calls it concurrently.
 /// Everything a client sends is validated here before it reaches the store.
 /// </summary>
-public sealed class AuthService(AuthOptions options, IGameStore store, PasswordHasher hasher, TicketSealer sealer, TimeProvider clock, ContentPack content)
+public sealed class AuthService(AuthOptions options, IGameStore store, PasswordHasher hasher, TicketSealer sealer, TimeProvider clock, ContentPack content) : IDisposable
 {
     private readonly ConcurrentDictionary<string, (ulong AccountId, DateTimeOffset Expires)> _sessions = new(StringComparer.Ordinal);
     private readonly Lock _sealLock = new();
     private long _lastSweepTicks;
+    private readonly SemaphoreSlim _hashing = new(options.MaxConcurrentHashes > 0
+        ? options.MaxConcurrentHashes
+        : throw new ArgumentOutOfRangeException(nameof(options), "MaxConcurrentHashes must be positive."));
 
     public async Task<AuthResult<RegisterResponse>> RegisterAsync(Credentials? request, CancellationToken cancellationToken = default)
     {
@@ -58,7 +67,8 @@ public sealed class AuthService(AuthOptions options, IGameStore store, PasswordH
             return AuthResult.Fail<RegisterResponse>(HttpStatusCode.BadRequest, AuthErrorCodes.InvalidPassword,
                 $"Passwords are at least {options.MinPasswordLength} characters and at most {PasswordHasher.MaxPasswordBytes} bytes.");
         }
-        var account = await store.CreateAccountAsync(request.Username, hasher.Hash(password), cancellationToken).ConfigureAwait(false);
+        var hash = await Hashing(() => hasher.Hash(password), cancellationToken).ConfigureAwait(false);
+        var account = await store.CreateAccountAsync(request.Username, hash, cancellationToken).ConfigureAwait(false);
         return account is null
             ? AuthResult.Fail<RegisterResponse>(HttpStatusCode.Conflict, AuthErrorCodes.UsernameTaken, "That username is taken.")
             : AuthResult.Ok<RegisterResponse>(new RegisterResponse(account.Id), HttpStatusCode.Created);
@@ -74,17 +84,19 @@ public sealed class AuthService(AuthOptions options, IGameStore store, PasswordH
         var account = await store.FindAccountAsync(request.Username, cancellationToken).ConfigureAwait(false);
         if (account is null)
         {
-            hasher.VerifyNothing(request.Password); // same cost as a real check: no username probing by timing
+            // Same cost as a real check: no username probing by timing.
+            await Hashing(() => { hasher.VerifyNothing(request.Password); return true; }, cancellationToken).ConfigureAwait(false);
             return refused;
         }
-        var check = hasher.Verify(request.Password, account.PasswordHash);
+        var check = await Hashing(() => hasher.Verify(request.Password, account.PasswordHash), cancellationToken).ConfigureAwait(false);
         if (check == PasswordCheck.Invalid)
         {
             return refused;
         }
         if (check == PasswordCheck.ValidNeedsRehash)
         {
-            await store.SetPasswordHashAsync(account.Id, hasher.Hash(request.Password), cancellationToken).ConfigureAwait(false);
+            var upgraded = await Hashing(() => hasher.Hash(request.Password), cancellationToken).ConfigureAwait(false);
+            await store.SetPasswordHashAsync(account.Id, upgraded, cancellationToken).ConfigureAwait(false);
         }
 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -219,4 +231,20 @@ public sealed class AuthService(AuthOptions options, IGameStore store, PasswordH
         c.Level);
 
     private static string Key(string? name) => (name ?? string.Empty).Trim().ToLowerInvariant();
+
+    /// <summary>Runs one password hash or check, at most <see cref="AuthOptions.MaxConcurrentHashes"/> at a time.</summary>
+    private async Task<T> Hashing<T>(Func<T> work, CancellationToken cancellationToken)
+    {
+        await _hashing.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return work();
+        }
+        finally
+        {
+            _hashing.Release();
+        }
+    }
+
+    public void Dispose() => _hashing.Dispose();
 }

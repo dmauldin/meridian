@@ -19,31 +19,53 @@ public enum PasswordCheck
 /// without a migration: an old hash still verifies, and <see cref="PasswordCheck.ValidNeedsRehash"/>
 /// tells the caller to replace it.
 ///
-/// Today: PBKDF2-HMAC-SHA256 (in the .NET base library), <c>$pbkdf2-sha256$i=N$salt$hash</c>.
-/// Argon2id (memory-hard, the better choice) replaces it as the preferred algorithm once its
-/// package can be restored; existing PBKDF2 hashes then upgrade on login.
+/// New hashes are Argon2id (RFC 9106; libsodium through Geralt):
+/// <c>$argon2id$v=19$m=KiB,t=passes,p=1$salt$hash</c>. Hashes from before Argon2id,
+/// <c>$pbkdf2-sha256$i=N$salt$hash</c>, still verify and always ask to be replaced.
+///
+/// Each check holds <see cref="MemoryKib"/> of memory while it runs, so callers bound how many
+/// run at once (the auth service does).
 /// </summary>
 public sealed class PasswordHasher
 {
-    /// <summary>OWASP's 2023 recommendation for PBKDF2-HMAC-SHA256.</summary>
-    public const int DefaultIterations = 600_000;
+    /// <summary>
+    /// 64 MiB and 3 passes: RFC 9106's second recommended setting (its first wants 2 GiB), and
+    /// well above OWASP's floor of 19 MiB with 2 passes. About 90 ms on one core of the build machine.
+    /// </summary>
+    public const int DefaultMemoryKib = 65_536;
+
+    public const int DefaultPasses = 3;
 
     /// <summary>Bounds the work an attacker can ask for: longer passwords are refused, not hashed.</summary>
     public const int MaxPasswordBytes = 256;
 
-    private const string Pbkdf2Id = "pbkdf2-sha256";
-    private const int SaltBytes = 16;
-    private const int HashBytes = 32;
-    private const int MaxIterations = 10_000_000;
+    /// <summary>libsodium's floor.</summary>
+    public const int MinMemoryKib = 8;
 
-    public PasswordHasher(int iterations = DefaultIterations)
+    /// <summary>The most a stored hash may ask for. A hash that wants more is refused, not computed.</summary>
+    public const int MaxMemoryKib = 262_144;
+
+    public const int MaxPasses = 16;
+
+    private const string Argon2Id = "argon2id";
+    private const string Pbkdf2Id = "pbkdf2-sha256";
+    private const int SaltBytes = 16;   // libsodium takes exactly 16
+    private const int HashBytes = 32;
+    private const int MaxPbkdf2Iterations = 10_000_000;
+
+    public PasswordHasher(int memoryKib = DefaultMemoryKib, int passes = DefaultPasses)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(iterations, 1);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(iterations, MaxIterations);
-        Iterations = iterations;
+        ArgumentOutOfRangeException.ThrowIfLessThan(memoryKib, MinMemoryKib);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(memoryKib, MaxMemoryKib);
+        ArgumentOutOfRangeException.ThrowIfLessThan(passes, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(passes, MaxPasses);
+        MemoryKib = memoryKib;
+        Passes = passes;
     }
 
-    public int Iterations { get; }
+    public int MemoryKib { get; }
+
+    public int Passes { get; }
 
     /// <summary>True if <paramref name="password"/> can be hashed at all (non-empty, within the byte limit).</summary>
     public static bool IsAcceptableLength(string? password) =>
@@ -53,26 +75,41 @@ public sealed class PasswordHasher
     {
         var bytes = PasswordBytes(password) ?? throw new ArgumentException("Password is empty or too long.", nameof(password));
         var salt = RandomNumberGenerator.GetBytes(SaltBytes);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(bytes, salt, Iterations, HashAlgorithmName.SHA256, HashBytes);
+        var hash = new byte[HashBytes];
+        Geralt.Argon2id.DeriveKey(hash, bytes, salt, Passes, MemoryKib * 1024);
         CryptographicOperations.ZeroMemory(bytes);
-        return string.Create(CultureInfo.InvariantCulture, $"${Pbkdf2Id}$i={Iterations}${B64(salt)}${B64(hash)}");
+        return string.Create(CultureInfo.InvariantCulture, $"${Argon2Id}$v=19$m={MemoryKib},t={Passes},p=1${B64(salt)}${B64(hash)}");
     }
 
     /// <summary>Checks a password against a stored hash in time independent of where they differ.</summary>
     public PasswordCheck Verify(string? password, string? stored)
     {
         var bytes = PasswordBytes(password);
-        if (bytes is null || !TryParsePbkdf2(stored, out var iterations, out var salt, out var expected))
+        if (bytes is null)
         {
             return PasswordCheck.Invalid;
         }
-        var actual = Rfc2898DeriveBytes.Pbkdf2(bytes, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
-        CryptographicOperations.ZeroMemory(bytes);
-        if (!CryptographicOperations.FixedTimeEquals(actual, expected))
+        try
         {
+            if (TryParseArgon2(stored, out var memoryKib, out var passes, out var salt, out var expected))
+            {
+                var actual = new byte[expected.Length];
+                Geralt.Argon2id.DeriveKey(actual, bytes, salt, passes, memoryKib * 1024);
+                return !CryptographicOperations.FixedTimeEquals(actual, expected) ? PasswordCheck.Invalid
+                    : memoryKib < MemoryKib || passes < Passes ? PasswordCheck.ValidNeedsRehash
+                    : PasswordCheck.Valid;
+            }
+            if (TryParsePbkdf2(stored, out var iterations, out salt, out expected))
+            {
+                var actual = Rfc2898DeriveBytes.Pbkdf2(bytes, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
+                return CryptographicOperations.FixedTimeEquals(actual, expected) ? PasswordCheck.ValidNeedsRehash : PasswordCheck.Invalid;
+            }
             return PasswordCheck.Invalid;
         }
-        return iterations < Iterations ? PasswordCheck.ValidNeedsRehash : PasswordCheck.Valid;
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bytes);
+        }
     }
 
     /// <summary>
@@ -80,10 +117,30 @@ public sealed class PasswordHasher
     /// time does not reveal which usernames are registered.
     /// </summary>
     public void VerifyNothing(string? password) =>
-        Verify(password ?? string.Empty, $"${Pbkdf2Id}$i={Iterations}$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        Verify(password ?? string.Empty, string.Create(CultureInfo.InvariantCulture,
+            $"${Argon2Id}$v=19$m={MemoryKib},t={Passes},p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
 
     private static byte[]? PasswordBytes(string? password) =>
         IsAcceptableLength(password) ? Encoding.UTF8.GetBytes(password!) : null;
+
+    private static bool TryParseArgon2(string? stored, out int memoryKib, out int passes, out byte[] salt, out byte[] hash)
+    {
+        memoryKib = passes = 0;
+        salt = hash = [];
+        // "", id, "v=19", "m=..,t=..,p=1", salt, hash. Only what this build writes: version 19,
+        // one lane (libsodium has no others), a 16-byte salt.
+        var parts = stored?.Split('$');
+        if (parts is not ["", Argon2Id, "v=19", var cost, var saltText, var hashText]
+            || cost.Split(',') is not [var m, var t, "p=1"]
+            || !TryCost(m, "m=", MinMemoryKib, MaxMemoryKib, out memoryKib)
+            || !TryCost(t, "t=", 1, MaxPasses, out passes)
+            || !TryB64(saltText, out salt) || salt.Length != SaltBytes
+            || !TryB64(hashText, out hash) || hash.Length is < 16 or > 64)
+        {
+            return false;
+        }
+        return true;
+    }
 
     private static bool TryParsePbkdf2(string? stored, out int iterations, out byte[] salt, out byte[] hash)
     {
@@ -92,15 +149,22 @@ public sealed class PasswordHasher
         // "", id, "i=N", salt, hash
         var parts = stored?.Split('$');
         if (parts is not ["", Pbkdf2Id, var cost, var saltText, var hashText]
-            || !cost.StartsWith("i=", StringComparison.Ordinal)
-            || !int.TryParse(cost.AsSpan(2), NumberStyles.None, CultureInfo.InvariantCulture, out iterations)
-            || iterations is < 1 or > MaxIterations
+            || !TryCost(cost, "i=", 1, MaxPbkdf2Iterations, out iterations)
             || !TryB64(saltText, out salt) || salt.Length is < 8 or > 64
             || !TryB64(hashText, out hash) || hash.Length is < 16 or > 64)
         {
             return false;
         }
         return true;
+    }
+
+    /// <summary>Parses "<paramref name="key"/>N" with N in range: digits only, no sign or spaces.</summary>
+    private static bool TryCost(string text, string key, int min, int max, out int value)
+    {
+        value = 0;
+        return text.StartsWith(key, StringComparison.Ordinal)
+            && int.TryParse(text.AsSpan(key.Length), NumberStyles.None, CultureInfo.InvariantCulture, out value)
+            && value >= min && value <= max;
     }
 
     // PHC strings use standard base64 without padding.

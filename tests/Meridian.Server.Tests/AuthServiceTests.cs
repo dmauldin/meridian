@@ -24,9 +24,13 @@ public sealed class AuthServiceTests : IDisposable
     private readonly AuthService _auth;
 
     public AuthServiceTests() =>
-        _auth = new AuthService(new AuthOptions { MaxCharactersPerAccount = 2 }, _store, new PasswordHasher(1_000), _sealer, _clock, Meridian.Content.ContentPacks.Embedded);
+        _auth = new AuthService(new AuthOptions { MaxCharactersPerAccount = 2 }, _store, new PasswordHasher(memoryKib: 1024, passes: 1), _sealer, _clock, Meridian.Content.ContentPacks.Embedded);
 
-    public void Dispose() => _sealer.Dispose();
+    public void Dispose()
+    {
+        _auth.Dispose();
+        _sealer.Dispose();
+    }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -68,7 +72,7 @@ public sealed class AuthServiceTests : IDisposable
     {
         await _auth.RegisterAsync(new Credentials("Alice", "password1"), Ct);
         var stored = (await _store.FindAccountAsync("Alice", Ct))!.PasswordHash;
-        Assert.StartsWith("$pbkdf2-sha256$", stored, StringComparison.Ordinal);
+        Assert.StartsWith("$argon2id$", stored, StringComparison.Ordinal);
         Assert.DoesNotContain("password1", stored, StringComparison.Ordinal);
     }
 
@@ -86,9 +90,32 @@ public sealed class AuthServiceTests : IDisposable
     [Fact]
     public async Task Weak_hashes_are_upgraded_on_login()
     {
-        await _store.CreateAccountAsync("Alice", new PasswordHasher(10).Hash("password1"), Ct);
+        await _store.CreateAccountAsync("Alice", new PasswordHasher(memoryKib: 512, passes: 1).Hash("password1"), Ct);
         Assert.NotNull((await _auth.LoginAsync(new Credentials("alice", "password1"), Ct)).Value);
-        Assert.StartsWith("$pbkdf2-sha256$i=1000$", (await _store.FindAccountAsync("Alice", Ct))!.PasswordHash, StringComparison.Ordinal);
+        Assert.StartsWith("$argon2id$v=19$m=1024,t=1,p=1$", (await _store.FindAccountAsync("Alice", Ct))!.PasswordHash, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pbkdf2_hashes_from_before_argon2_are_upgraded_on_login()
+    {
+        // "password1" as the PBKDF2 hasher stored it (i=1000, salt bytes 0..15).
+        var salt = Enumerable.Range(0, 16).Select(i => (byte)i).ToArray();
+        var old = System.Security.Cryptography.Rfc2898DeriveBytes.Pbkdf2("password1"u8, salt, 1_000, System.Security.Cryptography.HashAlgorithmName.SHA256, 32);
+        await _store.CreateAccountAsync("Alice", $"$pbkdf2-sha256$i=1000${Convert.ToBase64String(salt).TrimEnd('=')}${Convert.ToBase64String(old).TrimEnd('=')}", Ct);
+        Assert.NotNull((await _auth.LoginAsync(new Credentials("Alice", "password1"), Ct)).Value);
+        var upgraded = (await _store.FindAccountAsync("Alice", Ct))!.PasswordHash;
+        Assert.StartsWith("$argon2id$", upgraded, StringComparison.Ordinal);
+        Assert.NotNull((await _auth.LoginAsync(new Credentials("Alice", "password1"), Ct)).Value); // and the new hash works
+    }
+
+    [Fact]
+    public async Task Concurrent_logins_hash_no_more_than_the_limit_at_once()
+    {
+        using var auth = new AuthService(new AuthOptions { MaxConcurrentHashes = 1 }, _store, new PasswordHasher(memoryKib: 1024, passes: 1), _sealer, _clock, Meridian.Content.ContentPacks.Embedded);
+        await auth.RegisterAsync(new Credentials("Alice", "password1"), Ct);
+        var logins = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => auth.LoginAsync(new Credentials("Alice", "password1"), Ct), Ct)));
+        Assert.All(logins, l => Assert.NotNull(l.Value)); // all queue and succeed; none fail for the limit
+        Assert.Throws<ArgumentOutOfRangeException>(() => new AuthService(new AuthOptions { MaxConcurrentHashes = 0 }, _store, new PasswordHasher(memoryKib: 1024, passes: 1), _sealer, _clock, Meridian.Content.ContentPacks.Embedded));
     }
 
     [Fact]

@@ -19,7 +19,7 @@ rm -f "$OUT"/*.log
 echo "building (Release)..."
 dotnet build "$ROOT/Meridian.slnx" -c Release -v quiet -nologo >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log"; exit 1; }
 
-export MERIDIAN_DEV_COMMANDS=1 MERIDIAN_PBKDF2_ITERATIONS=10000
+export MERIDIAN_DEV_COMMANDS=1 MERIDIAN_ARGON2_MEMORY_KIB=1024 MERIDIAN_ARGON2_PASSES=1
 export MERIDIAN_STORE=file MERIDIAN_STORE_DIR="$OUT/store"
 rm -rf "$MERIDIAN_STORE_DIR"
 

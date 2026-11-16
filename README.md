@@ -164,8 +164,11 @@ respawn at their spawn point; dead players respawn at a spawn point after 5 s at
 
 - **Accounts**: usernames are unique ignoring case. Passwords are hashed as self-describing
   PHC strings, so the algorithm can change without a migration: weaker hashes are replaced on
-  the next login. Today that is PBKDF2-SHA256 at 600,000 iterations; Argon2id replaces it once
-  its package can be restored. A login for an unknown user costs the same as a wrong password.
+  the next login. New hashes are Argon2id at 64 MiB and 3 passes (libsodium, about 60–90 ms);
+  PBKDF2 hashes from before it still verify and are upgraded at the next login. A login for an
+  unknown user costs the same as a wrong password. At most one hash per core runs at once
+  (each holds its 64 MiB), so a burst of logins queues instead of exhausting memory. Load tests
+  lower the cost with `MERIDIAN_ARGON2_MEMORY_KIB` and `MERIDIAN_ARGON2_PASSES` (auth warns).
 - **Stores** (`MERIDIAN_STORE`): `file` (default; one JSON file auth and zone share through a
   lock file and atomic replace) or `memory` (one process, tests). The Postgres store implements
   the same contract against `db/migrations`; its contract tests are the ones the other stores pass.
@@ -307,9 +310,8 @@ With a display (or `xvfb-run`) and `--screenshot`, it also saves a frame of the 
 
 ## Known limits and next steps
 
-- **The Postgres store and Argon2id are not in yet**: their packages could not be restored on
-  the build machine. The schema, migration runner and checks are done; the development file
-  store stands in and is not meant for production.
+- **The Postgres store is not in yet**: the schema, migration runner and checks are done; the
+  development file store stands in and is not meant for production.
 - **Casts are instant** and there is no Protocol initiative or cast bar yet; energy is not saved
   (full on login).
 - **Items have no ids yet**: an item is identified by where it sits. Trading (M3) adds ids.

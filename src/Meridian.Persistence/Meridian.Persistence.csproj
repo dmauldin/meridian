@@ -5,6 +5,10 @@
     The Postgres store lives beside these once Npgsql is available.
   -->
   <ItemGroup>
+    <!-- Argon2id from libsodium (native, so a check costs what an attacker's would). -->
+    <PackageReference Include="Geralt" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../Meridian.Core/Meridian.Core.csproj" />
   </ItemGroup>
 </Project>
