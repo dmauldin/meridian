@@ -23,7 +23,9 @@ public partial class GameView : Node3D
     private readonly CharacterWindow _character = new();
     private readonly InventoryWindow _inventory = new();
     private readonly ProtocolBar _protocolBar = new();
+    private readonly Node3D _exits = new() { Name = "Exits" };
     private EntityView? _selfView;
+    private uint _shownZone;
     private uint _target;
     private bool _ended;
     private double _netInfoTimer;
@@ -54,6 +56,7 @@ public partial class GameView : Node3D
     public override void _Ready()
     {
         WorldDressing.Build(this);
+        AddChild(_exits);
         AddChild(_camera);
         AddChild(_hud);
         _hud.ChatInput.TextSubmitted += OnChatSubmitted;
@@ -69,11 +72,8 @@ public partial class GameView : Node3D
         LayoutWindows();
         GetViewport().SizeChanged += LayoutWindows;
 
-        _selfView = new EntityView(World.SelfId, isSelf: true);
-        AddChild(_selfView);
-        _selfView.SetSelfName("You");
-        _selfView.Position = Units.ToGodot(World.Self.Position);
-        _camera.GlobalPosition = _selfView.Position;
+        ShowZone(); // exit pads and the self view
+        _camera.GlobalPosition = _selfView!.Position;
         _hud.AddChat("[color=#8af]Connected. Find a Glasswind Skitter (Tab), press Q to attack.[/color]");
     }
 
@@ -148,6 +148,33 @@ public partial class GameView : Node3D
     }
 
     public void SetAttack(bool enabled) => Session.SetAttack(enabled);
+
+    /// <summary>The current zone's exit pads, its name in chat, and a self view with the new entity id.</summary>
+    private void ShowZone()
+    {
+        if (!ContentPacks.Embedded.Zones.TryGet((int)World.ZoneId, out var zone))
+        {
+            return;
+        }
+        WorldDressing.BuildExits(_exits, zone, ContentPacks.Embedded);
+        if (_selfView is not null && _selfView.EntityId != World.SelfId)
+        {
+            _selfView.QueueFree();
+            _selfView = null;
+        }
+        if (_selfView is null)
+        {
+            _selfView = new EntityView(World.SelfId, isSelf: true);
+            AddChild(_selfView);
+            _selfView.SetSelfName("You");
+        }
+        _selfView.Position = Units.ToGodot(World.Self.Position);
+        if (_shownZone != zone.Id)
+        {
+            _shownZone = zone.Id; // the first Welcome is already shown by _Ready; say it once
+            _hud.AddChat($"[color=#8af]You are in {zone.Name}.[/color]");
+        }
+    }
 
     public void ToggleCharacter()
     {
@@ -262,6 +289,21 @@ public partial class GameView : Node3D
                 case SystemNotice notice:
                     _hud.AddChat($"[color=#8af]{Escape(notice.Text)}[/color]");
                     break;
+                case ZoneChanging change:
+                    // Leaving: drop everything from this zone until the destination's Welcome.
+                    foreach (var view in _views.Values)
+                    {
+                        view.QueueFree();
+                    }
+                    _views.Clear();
+                    _described.Clear();
+                    _target = 0;
+                    var name = ContentPacks.Embedded.Zones.TryGet((int)change.ToZoneId, out var to) ? to.Name : "another zone";
+                    _hud.SetBanner($"Travelling to {name}...");
+                    break;
+                case ZoneEntered:
+                    ShowZone();
+                    break;
                 case CharacterChanged:
                     if (_character.Visible)
                     {
@@ -328,7 +370,10 @@ public partial class GameView : Node3D
         {
             _hud.SetProgress(build.Level, build.Profession.Name, build.Xp, build.XpToNext, build.UnspentPoints);
         }
-        _hud.SetBanner(status.Dead ? "You are dead. Reclamation in progress..." : "");
+        if (World.InWorld)
+        {
+            _hud.SetBanner(status.Dead ? "You are dead. Reclamation in progress..." : "");
+        }
 
         if (_target != 0 && World.Entities.TryGetValue(_target, out var target) && target.HasSamples)
         {

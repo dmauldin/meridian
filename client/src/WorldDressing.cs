@@ -91,4 +91,50 @@ public static class WorldDressing
             root.AddChild(rock);
         }
     }
+
+    /// <summary>
+    /// Glowing pads where this zone's exits are, each labelled with where it leads. Rebuilt on
+    /// every zone change under <paramref name="root"/>.
+    /// </summary>
+    public static void BuildExits(Node3D root, Meridian.Core.Content.ZoneDef zone, Meridian.Core.Content.ContentPack pack)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(zone);
+        ArgumentNullException.ThrowIfNull(pack);
+        foreach (var child in root.GetChildren())
+        {
+            root.RemoveChild(child);
+            child.QueueFree();
+        }
+        var glow = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.2f, 0.55f, 0.95f, 0.3f),
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            EmissionEnabled = true,
+            Emission = new Color(0.25f, 0.6f, 1f),
+            EmissionEnergyMultiplier = 0.8f,
+        };
+        foreach (var exit in zone.Exits)
+        {
+            var a = exit.Area;
+            var size = new Vector3((float)((a.MaxX - a.MinX) * Units.MetresPerMm), 0.15f, (float)((a.MaxZ - a.MinZ) * Units.MetresPerMm));
+            root.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = size with { Y = 0.05f } },
+                MaterialOverride = glow,
+                Position = Units.ToGodot(a.Center, 0.08f),
+            });
+            var to = pack.Zones.TryGet(exit.ToZoneKey, out var destination) ? destination.Name : exit.ToZoneKey;
+            root.AddChild(new Label3D
+            {
+                Text = $"To {to}",
+                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                FontSize = 64,
+                OutlineSize = 12,
+                Modulate = new Color(0.75f, 0.9f, 1f),
+                Position = Units.ToGodot(a.Center, 2.5f),
+            });
+        }
+    }
 }

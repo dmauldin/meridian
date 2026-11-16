@@ -14,7 +14,9 @@ namespace Meridian.Client;
 /// </remarks>
 /// <param name="ShowUi">Before the screenshot, open the character and inventory windows, cast a Protocol on
 /// yourself and give yourself an item to inspect (needs the zone's MERIDIAN_DEV_COMMANDS=1).</param>
-public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession, bool ShowUi)
+/// <param name="Travel">Instead of fighting, walk into the zone's exit and stop 2 s after arriving in the next
+/// zone (screenshots: the pad on the way, as <c>name.pad.png</c>, and the arrival). Needs that zone running.</param>
+public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession, bool ShowUi, bool Travel = false)
 {
     public static AutoPilotOptions? Parse(string[] args)
     {
@@ -35,7 +37,8 @@ public sealed record AutoPilotOptions(string AuthUrl, string Username, string Pa
             double.Parse(Arg("--timeout", "120"), System.Globalization.CultureInfo.InvariantCulture),
             Arg("--screenshot", "") is { Length: > 0 } shot ? shot : null,
             Arg("--profession", "Operative"),
-            args.Contains("--show-ui"));
+            args.Contains("--show-ui"),
+            args.Contains("--travel"));
     }
 }
 
@@ -55,6 +58,9 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
     private bool _shotTaken;
     private bool _uiShown;
     private bool _itemSelected;
+    private uint? _travelFrom;
+    private double _arrivedAt = -1;
+    private bool _padShot;
     private int _pointsBefore = -1;
     private bool _trainSeen;
 
@@ -62,8 +68,51 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
 
     public override void _ExitTree() => view.WorldEvent -= OnWorldEvent;
 
+    /// <summary>Walks onto the first exit; reports arriving in its zone, with screenshots of the pad and the arrival.</summary>
+    private void Travel(ClientWorld world)
+    {
+        if (_arrivedAt >= 0)
+        {
+            view.PilotDirection = ((short)0, (short)0);
+            if (_elapsed - _arrivedAt > 2)
+            {
+                Shoot(options.ScreenshotPath);
+                GD.Print($"AUTOPILOT TRAVEL arrived zone={world.ZoneId} at {world.Self.Position.X / 1000} m, {world.Self.Position.Z / 1000} m seconds={_elapsed:0.0}");
+                GetTree().Quit(0);
+            }
+            return;
+        }
+        if (!world.InWorld || !Meridian.Content.ContentPacks.Embedded.Zones.TryGet((int)world.ZoneId, out var zone) || zone.Exits.Count == 0)
+        {
+            view.PilotDirection = ((short)0, (short)0);
+            return;
+        }
+        _travelFrom ??= world.ZoneId;
+        var pad = zone.Exits[0].Area.Center;
+        if (!_padShot && Movement.Distance(world.Self.Position, pad) < 12_000)
+        {
+            _padShot = true;
+            Shoot(options.ScreenshotPath is { } path ? System.IO.Path.ChangeExtension(path, ".pad.png") : null);
+        }
+        view.PilotDirection = Movement.DirectionTowards(world.Self.Position, pad);
+    }
+
+    private void Shoot(string? path)
+    {
+        if (path is not null)
+        {
+            var error = GetViewport().GetTexture().GetImage().SavePng(path);
+            GD.Print($"AUTOPILOT SCREENSHOT {path} ({error})");
+        }
+    }
+
     private void OnWorldEvent(GameEvent e)
     {
+        if (e is ZoneEntered entered && _travelFrom is { } from && entered.ZoneId != from && _arrivedAt < 0)
+        {
+            _arrivedAt = _elapsed;
+            return;
+        }
         var self = view.World.SelfId;
         if (e is CombatText { Outcome: HitOutcome.Hit or HitOutcome.Critical } hit && hit.AttackerId == self && hit.TargetId == _quarry)
         {
@@ -90,6 +139,11 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
         }
 
         var world = view.World;
+        if (options.Travel)
+        {
+            Travel(world);
+            return;
+        }
         if (options.ShowUi && !_uiShown && _firstHitAt >= 0)
         {
             _uiShown = true;
