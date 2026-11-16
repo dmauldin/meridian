@@ -7,12 +7,13 @@ names and systems are original.
 - Design: [Game Design Document](https://claude.ai/artifact/8FGVNSTFDMqDiQZ9AN5WzB)
 - Architecture: [Technical Architecture & Roadmap](https://claude.ai/artifact/6owmrpxx4VkgdvmS3wDvvQ)
 
-## Status: M0 and M1 complete; M2 (build loop) in progress
+## Status: M0, M1 and M2 complete
 
 | Gate | Result |
 | --- | --- |
 | M0: 100 bots in one zone at a steady 20 Hz | **Pass.** 20.00 Hz, p99 tick work 1.1–2.2 ms, 0 overruns, ~7 KB/s per client, every bot at 10 Hz snapshots (2-core box, bots and all services co-located, 60 s) |
 | M1: 2 players kill a mob together over the net | **Pass with the real client.** `scripts/m1-gate.sh` runs two headless Godot clients on autopilot; both hit the same skitter and see it die (~21 s). Also covered server-side by `EndToEndTests`. |
+| M2: twink a rifle with another player's buff | **Pass.** `scripts/m2-gate.sh`: an Operative cannot wear a QL 1 Kestrel Mk2 alone, can once a Medic's Reflex Boost lands, walks it into a second zone (still worn and active, same connection), and it goes inactive when the buff is dropped (~18 s). |
 | Combat load: 100 hunting bots vs 40 mobs | 20.00 Hz, p99 tick work 1.5–3.9 ms, 0 overruns, 1,802 hits and 114 kills in 60 s |
 
 Headroom check, same machine: 300 bots still held 20 Hz with no overruns; p99 tick work
@@ -50,7 +51,8 @@ tests/                      xunit v3 on Microsoft.Testing.Platform.
 db/                         Postgres schema migrations and their checks. See db/README.md.
 scripts/m0-gate.sh          Builds, starts the stack, runs bots, checks the gate.
 scripts/db-check.sh         Applies the migrations to a throwaway database and checks them.
-scripts/m2-gate.sh          M2 gate: twink a rifle with another player's buff (two clients).
+scripts/m2-gate.sh          M2 gate: twink a rifle with another player's buff and carry it into
+                            another zone (two clients, two zones).
 deploy/                     Dockerfile and docker-compose for the server stack.
 ```
 
@@ -69,7 +71,7 @@ dotnet run --project src/Meridian.ContentCompiler   # after editing anything in 
 scripts/m0-gate.sh 100 60                      # load test: bots, seconds
 scripts/m0-gate.sh 100 60 hunt                 # same, with bots fighting mobs
 scripts/db-check.sh                            # migrations against a throwaway Postgres
-scripts/m2-gate.sh                             # M2 gate: two clients, one buffs the other
+scripts/m2-gate.sh                             # M2 gate: two clients, two zones
 ```
 
 Run the stack by hand, each in its own terminal (development keys are used and a warning
@@ -82,6 +84,15 @@ dotnet run --project src/Meridian.Server.Zone
 dotnet run --project src/Meridian.Server.Gateway
 dotnet run --project src/Meridian.Server.Auth
 dotnet run --project src/Meridian.Bots -- --count 10 --duration 30
+```
+
+That runs one zone, Glasswind Flats. To also run Rustfall Basin, start a second zone and tell
+the gateway about both (see [Zones](#zones-m2)):
+
+```bash
+MERIDIAN_ZONE_KEY=glasswind_flats MERIDIAN_ZONE_PORT=7800 dotnet run --project src/Meridian.Server.Zone
+MERIDIAN_ZONE_KEY=rustfall_basin  MERIDIAN_ZONE_PORT=7801 dotnet run --project src/Meridian.Server.Zone
+MERIDIAN_ZONES="1@127.0.0.1:7800,2@127.0.0.1:7801" dotnet run --project src/Meridian.Server.Gateway
 ```
 
 Or with Docker: copy `deploy/.env.example` to `deploy/.env`, set real keys, then
@@ -214,7 +225,7 @@ interpolate between the template's QL anchors. The rules are `Outfit` in `Meridi
   join and on any change). The inventory window (I) or `/inv`, `/equip <#>`,
   `/unequip <slot>`, `/discard <#>` in chat.
 - **Development**: with `MERIDIAN_DEV_COMMANDS=1` the zone accepts `/give <item key> <ql>`
-  (and warns at start). There is no permission model yet, so never on a public server.
+  and `/goto <x m> <z m>` (and warns at start). There is no permission model yet, so never on a public server.
 
 ## Protocols (M2)
 
@@ -242,6 +253,39 @@ in `Meridian.Core`: the Protocols a character knows, its energy, and what runs o
 The M2 gate, `scripts/m2-gate.sh`, plays this through the real stack with two clients: an
 Operative cannot wear a QL 1 Kestrel Mk2 on its own buff, can once a Medic's Reflex Boost
 lands, and the rifle goes inactive when that buff is dropped.
+
+## Zones (M2)
+
+Each zone is its own process with its own simulation and tick; the gateway holds one link per
+zone and routes each session to the zone that owns it. There are two zones: Glasswind Flats
+(id 1, skitters, where new characters start) and Rustfall Basin (id 2, level 6 striders). Each
+has an exit pad at its edge (`exits` in content) that leads to the other.
+
+- **Config**: a zone serves `MERIDIAN_ZONE_KEY` (default `glasswind_flats`); the gateway's
+  `MERIDIAN_ZONES` is `id@host:port,...` (default: zone 1 only). On connecting, a zone sends
+  `ZoneHello` with its id and the gateway drops the link if it is not the zone it expected.
+- **Logging in**: the ticket names the zone the character was saved in, and the gateway refuses
+  the join with a clear reason if that zone is not up. Losing one zone's link drops only that
+  zone's players.
+- **Crossing**: when a player steps onto an exit, the zone tells the client (`ZoneChange`),
+  takes the player out, and saves the character placed at the arrival point in the other zone.
+  Only once that save is confirmed does it ask the gateway to move the session
+  (`TransferClient`); the new zone then loads the character from the store as on any login. The
+  old zone never saves that character again, so the new zone always loads exactly what left.
+  If the save fails or the destination is down, the player is dropped with a message and logs
+  back in where the store last had them. Arriving players ignore exits for 2 s, so arrival
+  points cannot bounce them back.
+- **Same connection**: the client keeps its UDP connection and session key; only the zone
+  behind it changes. The gateway ignores anything an old zone still sends for a session it no
+  longer owns (`stale` in its metrics), and the client resets its snapshot state on
+  `ZoneChange`, since the new zone's ticks are unrelated.
+- **What travels**: everything saved: skills, items (twinked ones too), known Protocols and
+  running buffs with their remaining time, health. Energy is full on arrival, as on login.
+
+The M2 gate ends with the twinked Operative walking into Rustfall Basin and checking the rifle
+is still worn and active, on the same connection. The load bots steer clear of exits so the
+single-zone M0 gate measures what it always did. The autopilot's `--travel` walks a real client
+across (and with `--screenshot`, saves the pad and the arrival).
 
 ## Client UI (M2)
 
@@ -271,6 +315,9 @@ With a display (or `xvfb-run`) and `--screenshot`, it also saves a frame of the 
 - **Items have no ids yet**: an item is identified by where it sits. Trading (M3) adds ids.
 - **Characters with no items at all get their kit on join**, so characters created before
   items existed are not left unarmed. Discarding everything therefore brings the kit back.
+- **Zones are separate maps joined by pads**: nothing is seen across a zone border, and a
+  crossing takes about one save (tens of milliseconds locally) with the world briefly empty.
+  There is no zone directory yet: the gateway's zone list is static config.
 - **Login sessions live in the auth process's memory**, so restarting auth logs everyone out of
   character select (not out of the game). Fine for one auth instance.
 - **Placeholder art**: capsules and a glassy six-legged skitter built from primitives.
