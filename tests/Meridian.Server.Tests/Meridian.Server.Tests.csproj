@@ -16,5 +16,6 @@
     <ProjectReference Include="../../src/Meridian.Server.Zone/Meridian.Server.Zone.csproj" />
     <ProjectReference Include="../../src/Meridian.Server.Gateway/Meridian.Server.Gateway.csproj" />
     <ProjectReference Include="../../src/Meridian.Server.Auth/Meridian.Server.Auth.csproj" />
+    <ProjectReference Include="../../src/Meridian.ClientState/Meridian.ClientState.csproj" />
   </ItemGroup>
 </Project>

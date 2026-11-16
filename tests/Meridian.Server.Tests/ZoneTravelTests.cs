@@ -3,6 +3,7 @@ using Meridian.Core.Characters;
 using Meridian.Core.Content;
 using Meridian.Core.World;
 using Meridian.Persistence;
+using Meridian.Server.Gateway;
 using Meridian.Server.Zone;
 using Meridian.Wire;
 
@@ -103,4 +104,20 @@ public class ZoneTravelTests
         Assert.Equal("Usage: /goto <x metres> <z metres>", outbox.Last<Notice>(A).Text);
     }
 
+    [Theory]
+    [InlineData("1@127.0.0.1:7800", 1, "127.0.0.1", 7800)]
+    [InlineData(" 2@zone-two.internal:7801 , 1@10.0.0.5:7800", 2, "zone-two.internal", 7801)]
+    public void Gateway_zone_lists_parse(string text, uint id, string host, int port)
+    {
+        var first = ZoneEndpoint.ParseList(text)[0];
+        Assert.Equal(new ZoneEndpoint(id, host, port), first);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1:7800")]
+    [InlineData("x@127.0.0.1:7800")]
+    [InlineData("1@127.0.0.1")]
+    [InlineData("1@:7800")]
+    public void Bad_gateway_zone_lists_are_refused(string text) =>
+        Assert.Throws<FormatException>(() => ZoneEndpoint.ParseList(text));
 }

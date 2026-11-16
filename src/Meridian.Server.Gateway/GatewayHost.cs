@@ -11,9 +11,16 @@ public sealed record GatewayOptions
 {
     public int ClientPort { get; init; } = NetDefaults.GatewayPort;
 
+    /// <summary>The single zone (id 1) used when <see cref="Zones"/> is empty.</summary>
     public string ZoneHost { get; init; } = "127.0.0.1";
 
+    /// <summary>The single zone's port, used when <see cref="Zones"/> is empty.</summary>
     public int ZonePort { get; init; } = NetDefaults.ZonePort;
+
+    /// <summary>Every zone this gateway routes to. Empty means one zone, id 1, at ZoneHost:ZonePort.</summary>
+    public IReadOnlyList<ZoneEndpoint> Zones { get; init; } = [];
+
+    internal IReadOnlyList<ZoneEndpoint> EffectiveZones => Zones.Count > 0 ? Zones : [new ZoneEndpoint(1, ZoneHost, ZonePort)];
 
     public required string InternalKey { get; init; }
 
@@ -28,10 +35,36 @@ public sealed record GatewayOptions
     public TimeSpan MetricsInterval { get; init; } = TimeSpan.FromSeconds(5);
 }
 
+/// <summary>Where one zone process listens.</summary>
+public sealed record ZoneEndpoint(uint ZoneId, string Host, int Port)
+{
+    /// <summary>Parses <c>1@127.0.0.1:7800,2@127.0.0.1:7801</c>.</summary>
+    public static IReadOnlyList<ZoneEndpoint> ParseList(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return
+        [
+            .. text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(entry =>
+            {
+                var at = entry.IndexOf('@', StringComparison.Ordinal);
+                var colon = entry.LastIndexOf(':');
+                if (at <= 0 || colon <= at + 1
+                    || !uint.TryParse(entry.AsSpan(0, at), NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+                    || !int.TryParse(entry.AsSpan(colon + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var port))
+                {
+                    throw new FormatException($"Zone '{entry}' is not id@host:port.");
+                }
+                return new ZoneEndpoint(id, entry[(at + 1)..colon], port);
+            }),
+        ];
+    }
+}
+
 /// <summary>
 /// The client-facing edge: validates tickets, decrypts and shape-checks client packets,
-/// rate-limits, and relays between clients and the zone. Runs on the thread that calls
-/// <see cref="Run"/>.
+/// rate-limits, and relays between each client and the zone it is in. Clients keep their
+/// connection when they change zones: the zone they leave sends <see cref="TransferClient"/>
+/// and the gateway re-routes them. Runs on the thread that calls <see cref="Run"/>.
 /// </summary>
 public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
 {
@@ -46,10 +79,10 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
     private readonly byte[] _plain = new byte[Envelope.MaxPacketBytes];
     private readonly byte[] _sealed = new byte[Envelope.MaxPacketBytes + SessionCipher.Overhead];
     private readonly byte[] _internal = new byte[Envelope.MaxPacketBytes + 64];
-    private NetPeer? _zone;
-    private long _nextZoneAttempt;
+    private readonly Dictionary<uint, ZoneLink> _links = [];
+    private readonly Dictionary<int, ZoneLink> _linkByPeer = [];
     private uint _nextConnectionId = 1;
-    private long _packetsIn, _packetsOut, _dropped;
+    private long _packetsIn, _packetsOut, _dropped, _stale, _transfers;
 
     public GatewayHost(GatewayOptions options, Action<string>? log = null)
     {
@@ -64,8 +97,12 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         clientEvents.NetworkReceiveEvent += OnClientPacket;
         _clients = NetDefaults.Configure(new NetManager(clientEvents));
 
+        foreach (var zone in options.EffectiveZones)
+        {
+            _links.Add(zone.ZoneId, new ZoneLink(zone));
+        }
         var zoneEvents = new EventBasedNetListener();
-        zoneEvents.PeerConnectedEvent += p => _log($"connected to zone at {p}");
+        zoneEvents.PeerConnectedEvent += p => _log($"link up to {p}; waiting for its ZoneHello");
         zoneEvents.PeerDisconnectedEvent += OnZoneDisconnected;
         zoneEvents.NetworkReceiveEvent += (peer, reader, _, _) =>
         {
@@ -85,7 +122,11 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
 
     public int ClientCount => _byConnection.Count;
 
-    public bool ZoneConnected => _zone?.ConnectionState == ConnectionState.Connected;
+    /// <summary>True when every configured zone is connected and has confirmed which zone it is.</summary>
+    public bool ZoneConnected => _links.Values.All(l => l.Ready);
+
+    /// <summary>Clients moved between zones since start.</summary>
+    public long Transfers => _transfers;
 
     public void Start()
     {
@@ -94,7 +135,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             throw new InvalidOperationException($"Could not bind UDP port {_options.ClientPort}.");
         }
         _zones.Start();
-        _log($"gateway listening on udp/{Port}, zone at {_options.ZoneHost}:{_options.ZonePort}");
+        _log($"gateway listening on udp/{Port}, zones {string.Join(", ", _links.Values.Select(l => $"{l.Endpoint.ZoneId}@{l.Endpoint.Host}:{l.Endpoint.Port}"))}");
     }
 
     public void Run(CancellationToken stop)
@@ -109,7 +150,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             if (now >= nextReport)
             {
                 _log(string.Create(CultureInfo.InvariantCulture,
-                    $"GATEWAY clients={ClientCount} zone={(ZoneConnected ? "up" : "down")} in={_packetsIn} out={_packetsOut} dropped={_dropped}"));
+                    $"GATEWAY clients={ClientCount} zones_up={_links.Values.Count(l => l.Ready)}/{_links.Count} in={_packetsIn} out={_packetsOut} dropped={_dropped} stale={_stale} transfers={_transfers}"));
                 nextReport = now + metricsTicks;
             }
         }
@@ -120,7 +161,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
     /// <summary>One iteration of network processing. Exposed for tests that drive the loop themselves.</summary>
     public void PollOnce()
     {
-        EnsureZoneLink();
+        EnsureZoneLinks();
         _zones.PollEvents();
         _clients.PollEvents();
     }
@@ -136,15 +177,9 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
     }
 
-    // Zone hand-off arrives in a later commit; until then these are logged and ignored.
-    public void OnTransferClient(NetPeer context, in TransferClient message) =>
-        _log($"zone sent TransferClient for {message.ConnectionId}; hand-off is not supported yet");
-
-    public void OnZoneHello(NetPeer context, in ZoneHello message) => _log($"zone {message.ZoneId} said hello");
-
     public void OnDropClient(NetPeer context, in DropClient message)
     {
-        if (_byConnection.TryGetValue(message.ConnectionId, out var session))
+        if (Owned(context, message.ConnectionId) is { } session)
         {
             _log($"zone dropped connection {message.ConnectionId}: {message.Reason}");
             Kick(session, message.Reason ?? "Disconnected by the server.");
@@ -153,9 +188,9 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
 
     public void OnToClient(NetPeer context, in ToClient message)
     {
-        if (!_byConnection.TryGetValue(message.ConnectionId, out var session) || message.Payload is null)
+        if (message.Payload is null || Owned(context, message.ConnectionId) is not { } session)
         {
-            return; // client left while the packet was in flight
+            return; // the client left, or moved to another zone, while the packet was in flight
         }
         if (message.DeliveryMode > (byte)Delivery.ReliableUnordered)
         {
@@ -168,6 +203,45 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         _packetsOut++;
     }
 
+    /// <summary>
+    /// The client's zone saved its character into another zone: route the client there. Only the
+    /// zone that owns the client may move it; a destination that is down ends the session (the
+    /// character is already saved there, so logging in again resumes it).
+    /// </summary>
+    public void OnTransferClient(NetPeer context, in TransferClient message)
+    {
+        if (Owned(context, message.ConnectionId) is not { } session)
+        {
+            return;
+        }
+        if (!_links.TryGetValue(message.ZoneId, out var to) || !to.Ready)
+        {
+            _log($"connection {session.ConnectionId}: zone {message.ZoneId} unavailable for a transfer");
+            Kick(session, "That area is unavailable right now. Please log in again.");
+            return;
+        }
+        session.ZoneId = message.ZoneId;
+        _transfers++;
+        SendToZone(session.ZoneId, JoinFor(session));
+    }
+
+    /// <summary>A zone says which zone it is; a mismatch with this gateway's configuration drops the link.</summary>
+    public void OnZoneHello(NetPeer context, in ZoneHello message)
+    {
+        if (!_linkByPeer.TryGetValue(context.Id, out var link))
+        {
+            return;
+        }
+        if (message.ZoneId != link.Endpoint.ZoneId)
+        {
+            _log($"{link.Endpoint.Host}:{link.Endpoint.Port} says it is zone {message.ZoneId}, configured as {link.Endpoint.ZoneId}; dropping the link");
+            context.Disconnect();
+            return;
+        }
+        link.Verified = true;
+        _log($"connected to zone {message.ZoneId} at {context}");
+    }
+
     public void OnPlayerJoin(NetPeer context, in PlayerJoin message) => Unexpected(nameof(PlayerJoin));
 
     public void OnPlayerLeave(NetPeer context, in PlayerLeave message) => Unexpected(nameof(PlayerLeave));
@@ -176,29 +250,50 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
 
     private void Unexpected(string name) => _log($"zone sent {name}, which only flows gateway → zone");
 
-    private void EnsureZoneLink()
+    private void EnsureZoneLinks()
     {
-        if (_zone is { ConnectionState: ConnectionState.Connected or ConnectionState.Outgoing })
-        {
-            return;
-        }
         var now = Stopwatch.GetTimestamp();
-        if (now < _nextZoneAttempt)
+        foreach (var link in _links.Values)
         {
-            return;
+            if (link.Peer is { ConnectionState: ConnectionState.Connected or ConnectionState.Outgoing } || now < link.NextAttempt)
+            {
+                continue;
+            }
+            link.NextAttempt = now + Stopwatch.Frequency; // retry once a second
+            link.Verified = false;
+            link.Peer = _zones.Connect(link.Endpoint.Host, link.Endpoint.Port, _options.InternalKey);
+            if (link.Peer is not null)
+            {
+                _linkByPeer[link.Peer.Id] = link;
+            }
         }
-        _nextZoneAttempt = now + Stopwatch.Frequency; // retry once a second
-        _zone = _zones.Connect(_options.ZoneHost, _options.ZonePort, _options.InternalKey);
     }
+
+    /// <summary>The session for <paramref name="connectionId"/> if the zone at <paramref name="zone"/> owns it.</summary>
+    private ClientSession? Owned(NetPeer zone, uint connectionId)
+    {
+        if (!_byConnection.TryGetValue(connectionId, out var session))
+        {
+            return null;
+        }
+        if (!_linkByPeer.TryGetValue(zone.Id, out var link) || link.Endpoint.ZoneId != session.ZoneId)
+        {
+            _stale++; // e.g. a last snapshot from the zone the client just left
+            return null;
+        }
+        return session;
+    }
+
+    private static PlayerJoin JoinFor(ClientSession session) => new()
+    {
+        ConnectionId = session.ConnectionId,
+        AccountId = session.Ticket.AccountId,
+        Name = session.Ticket.CharacterName,
+        CharacterId = session.Ticket.CharacterId,
+    };
 
     private void OnConnectionRequest(ConnectionRequest request)
     {
-        if (!ZoneConnected)
-        {
-            Reject(request, "Zone unavailable, try again shortly.");
-            return;
-        }
-
         ConnectRequest hello;
         try
         {
@@ -222,6 +317,11 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             Reject(request, "Login expired. Please log in again.");
             return;
         }
+        if (!_links.TryGetValue(ticket.ZoneId, out var zone) || !zone.Ready)
+        {
+            Reject(request, "Zone unavailable, try again shortly."); // before using the ticket, so a retry works
+            return;
+        }
         if (!_usedTickets.TryUse(ticket, nowUnix))
         {
             Reject(request, "Login already used. Please log in again.");
@@ -229,16 +329,10 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
 
         var peer = request.Accept();
-        var session = new ClientSession(_nextConnectionId++, peer, ticket, _options.MaxPacketsPerSecond);
+        var session = new ClientSession(_nextConnectionId++, peer, ticket, _options.MaxPacketsPerSecond) { ZoneId = ticket.ZoneId };
         _byPeer[peer.Id] = session;
         _byConnection[session.ConnectionId] = session;
-        SendToZone(new PlayerJoin
-        {
-            ConnectionId = session.ConnectionId,
-            AccountId = ticket.AccountId,
-            Name = ticket.CharacterName,
-            CharacterId = ticket.CharacterId,
-        });
+        SendToZone(session.ZoneId, JoinFor(session));
     }
 
     private void OnClientPacket(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
@@ -277,7 +371,7 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
             Kick(session, $"Protocol violation: {e.Message}");
             return;
         }
-        SendToZone(new FromClient { ConnectionId = session.ConnectionId, Payload = plain.ToArray() });
+        SendToZone(session.ZoneId, new FromClient { ConnectionId = session.ConnectionId, Payload = plain.ToArray() });
     }
 
     private void OnClientDisconnected(NetPeer peer, DisconnectInfo info)
@@ -288,13 +382,19 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
         _byConnection.Remove(session.ConnectionId);
         session.Cipher.Dispose();
-        SendToZone(new PlayerLeave { ConnectionId = session.ConnectionId });
+        SendToZone(session.ZoneId, new PlayerLeave { ConnectionId = session.ConnectionId });
     }
 
     private void OnZoneDisconnected(NetPeer peer, DisconnectInfo info)
     {
-        _log($"zone link lost ({info.Reason}); disconnecting {ClientCount} clients");
-        foreach (var s in _byConnection.Values.ToList())
+        if (!_linkByPeer.Remove(peer.Id, out var link))
+        {
+            return;
+        }
+        link.Verified = false;
+        var inZone = _byConnection.Values.Where(s => s.ZoneId == link.Endpoint.ZoneId).ToList();
+        _log($"zone {link.Endpoint.ZoneId} link lost ({info.Reason}); disconnecting its {inZone.Count} clients");
+        foreach (var s in inZone)
         {
             Kick(s, "Zone went offline.");
         }
@@ -307,15 +407,15 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         session.Peer.Disconnect(_sealed.AsSpan(0, length));
     }
 
-    private void SendToZone<T>(in T message)
+    private void SendToZone<T>(uint zoneId, in T message)
         where T : struct, IWireMessage<T>
     {
-        if (_zone is null)
+        if (!_links.TryGetValue(zoneId, out var link) || link.Peer is null)
         {
             return;
         }
         var bytes = Envelope.Encode(_internal, message);
-        _zone.Send(bytes, 1, DeliveryMethod.ReliableOrdered);
+        link.Peer.Send(bytes, 1, DeliveryMethod.ReliableOrdered);
     }
 
     private static void Reject(ConnectionRequest request, string reason) =>
@@ -393,6 +493,24 @@ internal sealed class ClientSession(uint connectionId, NetPeer peer, LoginTicket
     public SessionCipher Cipher { get; } = new(ticket.SessionKey, PeerRole.Server);
 
     public TokenBucket Bucket { get; } = new(packetsPerSecond, packetsPerSecond * 2);
+
+    /// <summary>The zone the client is in; changes on a transfer.</summary>
+    public uint ZoneId { get; set; }
+}
+
+/// <summary>The gateway's link to one zone process.</summary>
+internal sealed class ZoneLink(ZoneEndpoint endpoint)
+{
+    public ZoneEndpoint Endpoint { get; } = endpoint;
+
+    public NetPeer? Peer { get; set; }
+
+    /// <summary>The zone's ZoneHello matched <see cref="Endpoint"/>.</summary>
+    public bool Verified { get; set; }
+
+    public long NextAttempt { get; set; }
+
+    public bool Ready => Verified && Peer?.ConnectionState == ConnectionState.Connected;
 }
 
 /// <summary>Classic token bucket on Stopwatch timestamps.</summary>
