@@ -33,6 +33,9 @@ public interface IGameStore
     /// record whose <see cref="CharacterRecord.Version"/> matches the stored one, bumping the
     /// version, atomically per character. Identity fields are never changed by a save.
     /// Records are independent: one conflict does not stop the others.
+    /// Every store normalises what it keeps the same way: items in (location, position) order,
+    /// known Protocols distinct and ascending, buffs still running (one per Protocol, the first
+    /// given wins) in Protocol id order.
     /// </summary>
     Task<IReadOnlyList<SaveOutcome>> SaveCharactersAsync(IReadOnlyList<CharacterRecord> records, CancellationToken cancellationToken = default);
 }

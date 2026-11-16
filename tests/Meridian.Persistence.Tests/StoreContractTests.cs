@@ -6,7 +6,7 @@ namespace Meridian.Persistence.Tests;
 
 /// <summary>
 /// The behaviour every <see cref="IGameStore"/> must have. Each store gets a subclass; the
-/// Postgres store will run the same tests against a real database.
+/// Postgres one runs against a real database (scripts/db-test.sh).
 /// </summary>
 public abstract class StoreContractTests : IDisposable
 {
@@ -146,6 +146,21 @@ public abstract class StoreContractTests : IDisposable
         var loaded = (await OpenAgain().LoadCharacterAsync(rook.Id, Ct))!;
         Assert.Equal([5001, 5002], loaded.KnownProtocols);              // de-duplicated, ascending
         Assert.Equal([new SavedBuff(5101, 30_000)], loaded.Buffs);      // nothing already over
+    }
+
+    [Fact]
+    public async Task Every_store_returns_items_and_buffs_in_the_same_order()
+    {
+        var a = await Account();
+        var rook = (await Store.CreateCharacterAsync(Draft(a.Id, "Rook"), 8, Ct)).Created!;
+        await Store.SaveCharactersAsync([rook with
+        {
+            Items = [new(ItemLocation.Worn, 13, 2001, 3), new(ItemLocation.Inventory, 9, 2001, 5), new(ItemLocation.Inventory, 2, 2001, 7)],
+            Buffs = [new(5200, 100), new(5101, 30_000), new(5200, 999)],
+        }], Ct);
+        var loaded = (await OpenAgain().LoadCharacterAsync(rook.Id, Ct))!;
+        Assert.Equal([new(ItemLocation.Inventory, 2, 2001, 7), new(ItemLocation.Inventory, 9, 2001, 5), new StoredItem(ItemLocation.Worn, 13, 2001, 3)], loaded.Items);
+        Assert.Equal([new(5101, 30_000), new SavedBuff(5200, 100)], loaded.Buffs); // one per Protocol, the first given wins
     }
 
     [Fact]
