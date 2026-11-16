@@ -596,6 +596,60 @@
           "qlSpread": 2
         }
       ]
+    },
+    {
+      "id": 2,
+      "key": "mob.rustfall_strider",
+      "name": "Rustfall Strider",
+      "level": 6,
+      "stats": {
+        "BodyDevelopment": 55,
+        "EvadeClose": 30,
+        "EvadeRanged": 30,
+        "MeleeAC": 25,
+        "MeleeInit": 10,
+        "ProjectileAC": 25,
+        "Stamina": 45,
+        "Unarmed": 60
+      },
+      "attack": {
+        "name": "Iron Hooves",
+        "attackSkill": "Unarmed",
+        "initiative": "MeleeInit",
+        "defence": "EvadeClose",
+        "damageType": "Melee",
+        "attackTimeMs": 2600,
+        "rangeMm": 3000,
+        "minDamage": 9,
+        "maxDamage": 20
+      },
+      "aggroRadiusMm": 7000,
+      "leashMm": 35000,
+      "speedMmPerSecond": 3500,
+      "respawnMs": 15000,
+      "xp": 260,
+      "loot": [
+        {
+          "item": "armor.marksman_gloves",
+          "chanceBp": 2000,
+          "qlSpread": 3
+        },
+        {
+          "item": "rifle.kestrel_mk2",
+          "chanceBp": 1000,
+          "qlSpread": 3
+        },
+        {
+          "item": "protocol.rifle_enhancement_1",
+          "chanceBp": 600,
+          "qlSpread": 0
+        },
+        {
+          "item": "protocol.reflex_boost_1",
+          "chanceBp": 600,
+          "qlSpread": 0
+        }
+      ]
     }
   ],
   "zones": [
@@ -617,6 +671,53 @@
           "centerZ": 0,
           "innerRadiusMm": 40000,
           "outerRadiusMm": 120000
+        }
+      ],
+      "exits": [
+        {
+          "toZone": "rustfall_basin",
+          "area": {
+            "minX": 58000,
+            "minZ": -4000,
+            "maxX": 66000,
+            "maxZ": 4000
+          },
+          "arriveX": -50000,
+          "arriveZ": 0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "rustfall_basin",
+      "name": "Rustfall Basin",
+      "bounds": {
+        "minX": -2000000,
+        "minZ": -2000000,
+        "maxX": 2000000,
+        "maxZ": 2000000
+      },
+      "spawns": [
+        {
+          "mobKey": "mob.rustfall_strider",
+          "count": 30,
+          "centerX": 60000,
+          "centerZ": 0,
+          "innerRadiusMm": 40000,
+          "outerRadiusMm": 140000
+        }
+      ],
+      "exits": [
+        {
+          "toZone": "glasswind_flats",
+          "area": {
+            "minX": -66000,
+            "minZ": -4000,
+            "maxX": -58000,
+            "maxZ": 4000
+          },
+          "arriveX": 50000,
+          "arriveZ": 0
         }
       ]
     }
@@ -815,6 +916,7 @@
       "RunSpeed": 5000
     },
     "unarmed": "unarmed.fists",
-    "inventorySlots": 30
+    "inventorySlots": 30,
+    "startZone": "glasswind_flats"
   }
 }

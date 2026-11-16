@@ -7,3 +7,8 @@ spawns:
     count: 40
     center_m: { x: 0, z: 0 }
     ring_m: { inner: 40, outer: 120 }
+# The transit pad east of the spawn leads to Rustfall Basin.
+exits:
+  - to: rustfall_basin
+    area_m: { min_x: 58, min_z: -4, max_x: 66, max_z: 4 }
+    arrive_m: { x: -50, z: 0 }

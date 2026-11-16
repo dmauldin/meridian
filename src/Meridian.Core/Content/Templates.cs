@@ -164,13 +164,20 @@ public sealed record MobDef(
 /// <summary>Mobs of one kind spawned in a ring around a point.</summary>
 public sealed record SpawnGroup(string MobKey, int Count, Position Center, int InnerRadiusMm, int OuterRadiusMm);
 
-public sealed record ZoneDef(uint Id, string Key, string Name, ZoneBounds Bounds, IReadOnlyList<SpawnGroup> Spawns);
+public sealed record ZoneDef(uint Id, string Key, string Name, ZoneBounds Bounds, IReadOnlyList<SpawnGroup> Spawns, IReadOnlyList<ZoneExit> Exits);
+
+/// <summary>
+/// A way out of a zone: stepping into <paramref name="Area"/> hands the player to
+/// <paramref name="ToZoneKey"/>, arriving at <paramref name="Arrive"/> there.
+/// </summary>
+public sealed record ZoneExit(string ToZoneKey, ZoneBounds Area, Position Arrive);
 
 /// <summary>Stats every new character starts with, before origin and profession add theirs.</summary>
 /// <param name="Stats">Common starting stats (origin and profession are applied on top).</param>
 /// <param name="UnarmedKey">The weapon item used when no active weapon is worn.</param>
 /// <param name="InventorySlots">How many items a character can carry besides what it wears.</param>
-public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats, string UnarmedKey, int InventorySlots);
+/// <param name="StartZoneKey">Where a new character first enters the world.</param>
+public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats, string UnarmedKey, int InventorySlots, string StartZoneKey);
 
 /// <summary>
 /// One possible drop. Each entry rolls on its own when the mob dies. The QL is the mob's level

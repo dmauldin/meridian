@@ -1,0 +1,14 @@
+id: 2
+key: rustfall_basin
+name: Rustfall Basin
+bounds_m: { min_x: -2000, min_z: -2000, max_x: 2000, max_z: 2000 }
+spawns:
+  - mob: mob.rustfall_strider
+    count: 30
+    center_m: { x: 60, z: 0 }
+    ring_m: { inner: 40, outer: 140 }
+# The pad west of the arrival point leads back to Glasswind Flats.
+exits:
+  - to: glasswind_flats
+    area_m: { min_x: -66, min_z: -4, max_x: -58, max_z: 4 }
+    arrive_m: { x: 50, z: 0 }

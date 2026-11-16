@@ -96,9 +96,11 @@ public sealed record BoundsDto(int MinX, int MinZ, int MaxX, int MaxZ);
 
 public sealed record SpawnDto(string MobKey, int Count, int CenterX, int CenterZ, int InnerRadiusMm, int OuterRadiusMm);
 
-public sealed record ZoneDto(uint Id, string Key, string Name, BoundsDto Bounds, List<SpawnDto> Spawns);
+public sealed record ZoneDto(uint Id, string Key, string Name, BoundsDto Bounds, List<SpawnDto> Spawns, List<ExitDto>? Exits = null);
 
-public sealed record NewCharacterDto(SortedDictionary<string, int> Stats, string Unarmed, int InventorySlots);
+public sealed record ExitDto(string ToZone, BoundsDto Area, int ArriveX, int ArriveZ);
+
+public sealed record NewCharacterDto(SortedDictionary<string, int> Stats, string Unarmed, int InventorySlots, string StartZone);
 
 public sealed record ProfessionDto(
     int Id,

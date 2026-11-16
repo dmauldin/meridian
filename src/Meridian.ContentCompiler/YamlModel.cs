@@ -217,6 +217,20 @@ internal sealed class ZoneYaml
     public BoundsYaml Bounds { get; set; } = new();
 
     public List<SpawnYaml> Spawns { get; set; } = [];
+
+    public List<ExitYaml> Exits { get; set; } = [];
+}
+
+/// <summary>Stepping into <c>area_m</c> takes the player to zone <c>to</c>, arriving at <c>arrive_m</c>.</summary>
+internal sealed class ExitYaml
+{
+    public string To { get; set; } = "";
+
+    [YamlMember(Alias = "area_m")]
+    public BoundsYaml Area { get; set; } = new();
+
+    [YamlMember(Alias = "arrive_m")]
+    public PointYaml Arrive { get; set; } = new();
 }
 
 internal sealed class StartingWeaponYaml
@@ -234,6 +248,9 @@ internal sealed class NewCharacterYaml
 
     [YamlMember(Alias = "inventory_slots")]
     public int InventorySlots { get; set; }
+
+    [YamlMember(Alias = "start_zone")]
+    public string StartZone { get; set; } = "";
 }
 
 internal sealed class ProfessionYaml
