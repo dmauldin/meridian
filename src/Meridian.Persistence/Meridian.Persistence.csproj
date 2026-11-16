@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Accounts and characters: records, the store interface, password hashing, and the
-    dependency-free stores (in-memory for tests, JSON file for local development).
-    The Postgres store lives beside these once Npgsql is available.
+    Accounts and characters: records, the store interface, password hashing, and the stores:
+    Postgres (production), in-memory (tests) and a JSON file (local development).
   -->
   <ItemGroup>
     <!-- Argon2id from libsodium (native, so a check costs what an attacker's would). -->
     <PackageReference Include="Geralt" />
+    <PackageReference Include="Npgsql" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Meridian.Core/Meridian.Core.csproj" />
