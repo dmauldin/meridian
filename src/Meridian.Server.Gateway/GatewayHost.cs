@@ -136,6 +136,12 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         }
     }
 
+    // Zone hand-off arrives in a later commit; until then these are logged and ignored.
+    public void OnTransferClient(NetPeer context, in TransferClient message) =>
+        _log($"zone sent TransferClient for {message.ConnectionId}; hand-off is not supported yet");
+
+    public void OnZoneHello(NetPeer context, in ZoneHello message) => _log($"zone {message.ZoneId} said hello");
+
     public void OnDropClient(NetPeer context, in DropClient message)
     {
         if (_byConnection.TryGetValue(message.ConnectionId, out var session))

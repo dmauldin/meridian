@@ -19,6 +19,12 @@ public sealed record EntityKilled(uint EntityId, uint KillerId) : GameEvent;
 public sealed record ChatLine(uint FromEntityId, string From, string Text) : GameEvent;
 
 /// <summary>A system message for the chat log or a banner (disconnects, respawns).</summary>
+/// <summary>Leaving this zone (the player stepped into an exit); the world is cleared until <see cref="ZoneEntered"/>.</summary>
+public sealed record ZoneChanging(uint ToZoneId) : GameEvent;
+
+/// <summary>In a zone (first join, or arrival after a zone change).</summary>
+public sealed record ZoneEntered(uint ZoneId) : GameEvent;
+
 /// <summary>Level, XP, points or stats changed; read <see cref="ClientWorld.Build"/> and <see cref="ClientWorld.EffectiveStats"/>.</summary>
 public sealed record CharacterChanged : GameEvent;
 

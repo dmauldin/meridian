@@ -70,12 +70,13 @@ Console.WriteLine($"  chat lines heard      {bots.Sum(b => b.ChatsHeard)}");
 Console.WriteLine($"  combat                hits={bots.Sum(b => b.Hits)} kills={bots.Sum(b => b.Kills)} deaths={bots.Sum(b => b.Deaths)}");
 Console.WriteLine($"  progression           xp={bots.Sum(b => b.Xp)} max_level={bots.Max(b => b.Level)}");
 Console.WriteLine($"  bytes received        {bots.Sum(b => b.Connection.BytesReceived) / 1024} KiB");
+Console.WriteLine($"  zone changes          {bots.Sum(b => b.ZoneChanges)} (load bots avoid exits; expect 0)");
 foreach (var g in failures)
 {
     Console.WriteLine($"  disconnected: {g.Count()} x {g.Key}");
 }
 
-var pass = connected == count && Pct(rates, 0) >= minSnapshotHz;
+var pass = connected == count && Pct(rates, 0) >= minSnapshotHz && bots.Sum(b => b.ZoneChanges) == 0;
 Console.WriteLine(pass ? "PASS" : "FAIL");
 
 foreach (var b in bots)

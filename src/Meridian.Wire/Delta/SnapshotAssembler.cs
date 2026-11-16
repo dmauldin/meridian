@@ -21,6 +21,17 @@ public sealed class SnapshotAssembler
     /// <summary>The newest tick rebuilt so far (what to acknowledge).</summary>
     public uint LatestTick { get; private set; }
 
+    /// <summary>
+    /// Forgets every baseline. Needed on a zone change: the new zone's ticks are unrelated to the
+    /// old one's, and anything older than <see cref="LatestTick"/> would be dropped as stale.
+    /// </summary>
+    public void Reset()
+    {
+        _byTick.Clear();
+        _order.Clear();
+        LatestTick = 0;
+    }
+
     /// <summary>Snapshots dropped because their baseline was unknown.</summary>
     public long MissingBaselines { get; private set; }
 

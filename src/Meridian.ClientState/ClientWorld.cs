@@ -36,6 +36,9 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
 
     public bool InWorld { get; private set; }
 
+    /// <summary>The zone the player is in (from the last Welcome); 0 before the first.</summary>
+    public uint ZoneId { get; private set; }
+
     public uint SelfId { get; private set; }
 
     public int TickMs { get; private set; } = 50;
@@ -127,7 +130,24 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
         TickMs = 1_000 / Math.Max(1, (int)message.TickRateHz);
         _serverOffsetMs = (message.ServerTick * (double)TickMs) - NowMs;
         Self.Teleport(new Position(message.X, message.Z), NowMs);
+        ZoneId = message.ZoneId;
         InWorld = true;
+        _events.Add(new ZoneEntered(message.ZoneId));
+    }
+
+    /// <summary>
+    /// Leaving for another zone on the same connection: forget everything about this one
+    /// (entities, snapshot baselines, the server clock) until the destination's Welcome.
+    /// Character, inventory and Protocols stay; the new zone resends them.
+    /// </summary>
+    public void OnZoneChange(GameConnection context, in ZoneChange message)
+    {
+        InWorld = false;
+        SelfId = 0;
+        _entities.Clear();
+        _assembler.Reset();
+        _serverOffsetMs = double.NaN;
+        _events.Add(new ZoneChanging(message.ZoneId));
     }
 
     public void OnDeltaSnapshot(GameConnection context, in DeltaSnapshot message)

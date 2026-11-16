@@ -242,6 +242,12 @@ message 215 ProtocolState client_bound reliable_ordered
   i32 latticeCapacity
 end
 
+# You are leaving this zone for another (stepped into an exit). Clear the world and wait: the
+# destination zone's Welcome follows on the same connection.
+message 216 ZoneChange client_bound reliable_ordered
+  u32 zoneId
+end
+
 message 212 XpGained client_bound reliable_ordered
   u32 amount
   u16 level
@@ -285,4 +291,17 @@ end
 message 1004 DropClient internal reliable_ordered
   u32 connectionId
   string(160) reason
+end
+
+# Zone → gateway: this client's character has been saved into another zone; route it there
+# (the gateway sends that zone a PlayerJoin). Only the zone that owns the client may send it.
+message 1005 TransferClient internal reliable_ordered
+  u32 connectionId
+  u32 zoneId
+end
+
+# Zone → gateway, first thing on a new link: which zone this process runs. A gateway configured
+# for another zone at this address drops the link instead of routing players to the wrong world.
+message 1006 ZoneHello internal reliable_ordered
+  u32 zoneId
 end

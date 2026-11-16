@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0x0E8B959D7B62C539UL;
+    public const ulong Hash = 0x4548FFFBBC41123EUL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -1068,6 +1068,31 @@ public partial struct ProtocolState : IWireMessage<ProtocolState>
     }
 }
 
+public partial struct ZoneChange : IWireMessage<ZoneChange>
+{
+    public const ushort Id = 216;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<ZoneChange>.Direction => Direction.ClientBound;
+
+    static Delivery IWireMessage<ZoneChange>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ZoneId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ZoneId);
+    }
+
+    public static ZoneChange Read(ref WireReader reader)
+    {
+        var value = default(ZoneChange);
+        value.ZoneId = reader.ReadU32();
+        return value;
+    }
+}
+
 public partial struct XpGained : IWireMessage<XpGained>
 {
     public const ushort Id = 212;
@@ -1283,6 +1308,60 @@ public partial struct DropClient : IWireMessage<DropClient>
     }
 }
 
+public partial struct TransferClient : IWireMessage<TransferClient>
+{
+    public const ushort Id = 1005;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<TransferClient>.Direction => Direction.Internal;
+
+    static Delivery IWireMessage<TransferClient>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ConnectionId;
+
+    public uint ZoneId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ConnectionId);
+        writer.WriteU32(ZoneId);
+    }
+
+    public static TransferClient Read(ref WireReader reader)
+    {
+        var value = default(TransferClient);
+        value.ConnectionId = reader.ReadU32();
+        value.ZoneId = reader.ReadU32();
+        return value;
+    }
+}
+
+public partial struct ZoneHello : IWireMessage<ZoneHello>
+{
+    public const ushort Id = 1006;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<ZoneHello>.Direction => Direction.Internal;
+
+    static Delivery IWireMessage<ZoneHello>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ZoneId;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ZoneId);
+    }
+
+    public static ZoneHello Read(ref WireReader reader)
+    {
+        var value = default(ZoneHello);
+        value.ZoneId = reader.ReadU32();
+        return value;
+    }
+}
+
 /// <summary>Receives ServerBound messages from <see cref="WireDispatch"/>.</summary>
 public interface IServerBoundHandler<in TContext>
 {
@@ -1342,6 +1421,8 @@ public interface IClientBoundHandler<in TContext>
 
     void OnProtocolState(TContext context, in ProtocolState message);
 
+    void OnZoneChange(TContext context, in ZoneChange message);
+
     void OnXpGained(TContext context, in XpGained message);
 
     void OnNotice(TContext context, in Notice message);
@@ -1359,6 +1440,10 @@ public interface IInternalHandler<in TContext>
     void OnToClient(TContext context, in ToClient message);
 
     void OnDropClient(TContext context, in DropClient message);
+
+    void OnTransferClient(TContext context, in TransferClient message);
+
+    void OnZoneHello(TContext context, in ZoneHello message);
 }
 
 /// <summary>
@@ -1570,6 +1655,13 @@ public static class WireDispatch
                 handler.OnProtocolState(context, message);
                 return id;
             }
+            case ZoneChange.Id:
+            {
+                var message = ZoneChange.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnZoneChange(context, message);
+                return id;
+            }
             case XpGained.Id:
             {
                 var message = XpGained.Read(ref reader);
@@ -1630,6 +1722,20 @@ public static class WireDispatch
                 var message = DropClient.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnDropClient(context, message);
+                return id;
+            }
+            case TransferClient.Id:
+            {
+                var message = TransferClient.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnTransferClient(context, message);
+                return id;
+            }
+            case ZoneHello.Id:
+            {
+                var message = ZoneHello.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnZoneHello(context, message);
                 return id;
             }
             default:

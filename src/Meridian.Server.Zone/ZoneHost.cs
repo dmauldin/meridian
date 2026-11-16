@@ -176,6 +176,12 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
     public void OnDropClient(NetPeer context, in DropClient message) =>
         _log($"gateway {context.Id} sent DropClient, which only flows zone → gateway");
 
+    public void OnTransferClient(NetPeer context, in TransferClient message) =>
+        _log($"gateway {context.Id} sent TransferClient, which only flows zone → gateway");
+
+    public void OnZoneHello(NetPeer context, in ZoneHello message) =>
+        _log($"gateway {context.Id} sent ZoneHello, which only flows zone → gateway");
+
     /// <summary>Asks the client's gateway to end its session with a reason the player sees.</summary>
     private void Drop(ClientRef client, string reason)
     {
