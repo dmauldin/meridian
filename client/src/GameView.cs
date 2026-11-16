@@ -1,5 +1,8 @@
 using Godot;
+using Meridian.Client.Ui;
 using Meridian.ClientState;
+using Meridian.ClientState.Views;
+using Meridian.Content;
 
 namespace Meridian.Client;
 
@@ -16,6 +19,10 @@ public partial class GameView : Node3D
     private readonly HashSet<uint> _described = [];
     private readonly CameraRig _camera = new();
     private readonly Hud _hud = new();
+    private readonly CanvasLayer _windows = new() { Layer = 2 };
+    private readonly CharacterWindow _character = new();
+    private readonly InventoryWindow _inventory = new();
+    private readonly ProtocolBar _protocolBar = new();
     private EntityView? _selfView;
     private uint _target;
     private bool _ended;
@@ -50,6 +57,17 @@ public partial class GameView : Node3D
         AddChild(_camera);
         AddChild(_hud);
         _hud.ChatInput.TextSubmitted += OnChatSubmitted;
+
+        AddChild(_windows);
+        _character.Bind(Session);
+        _inventory.Bind(Session);
+        _protocolBar.Bind(Session);
+        _windows.AddChild(_character);
+        _windows.AddChild(_inventory);
+        _windows.AddChild(_protocolBar);
+        _protocolBar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterBottom, Control.LayoutPresetMode.Minsize, 16);
+        LayoutWindows();
+        GetViewport().SizeChanged += LayoutWindows;
 
         _selfView = new EntityView(World.SelfId, isSelf: true);
         AddChild(_selfView);
@@ -104,6 +122,18 @@ public partial class GameView : Node3D
         {
             _hud.ChatInput.GrabFocus();
         }
+        else if (@event.IsActionPressed(Controls.ToggleCharacter))
+        {
+            ToggleCharacter();
+        }
+        else if (@event.IsActionPressed(Controls.ToggleInventory))
+        {
+            ToggleInventory();
+        }
+        else if (Enumerable.Range(1, 9).FirstOrDefault(i => @event.IsActionPressed(Controls.Protocol(i))) is > 0 and var number)
+        {
+            _protocolBar.CastHotkey(number);
+        }
         else
         {
             return;
@@ -118,6 +148,44 @@ public partial class GameView : Node3D
     }
 
     public void SetAttack(bool enabled) => Session.SetAttack(enabled);
+
+    public void ToggleCharacter()
+    {
+        _character.Toggle();
+        _character.Refresh();
+    }
+
+    public void ToggleInventory()
+    {
+        _inventory.Toggle();
+        _inventory.Refresh();
+    }
+
+    /// <summary>
+    /// Character window on the left between the self frame and the chat; inventory on the right
+    /// below the net readout and above the help text. Both shrink (and scroll) on small screens,
+    /// where the character window may also cover the chat log.
+    /// </summary>
+    private void LayoutWindows()
+    {
+        var screen = GetViewport().GetVisibleRect().Size;
+        const float Top = 230, Margin = 16, ChatHeight = 270, HelpHeight = 90;
+        // On short screens the character window may cover the chat log (never the chat input).
+        var characterHeight = screen.Y - Top - ChatHeight;
+        if (characterHeight < 380)
+        {
+            characterHeight = screen.Y - Top - 60;
+        }
+        _character.Place(new Vector2(Margin, Top), new Vector2(Math.Max(420, screen.X / 3), characterHeight));
+        var inventoryWidth = Math.Min(_inventory.PreferredSize.X, screen.X / 2.5f);
+        _inventory.Place(new Vector2(screen.X - inventoryWidth - Margin, 90), new Vector2(inventoryWidth, screen.Y - 90 - HelpHeight));
+    }
+
+    /// <summary>The character window, for the autopilot's UI check.</summary>
+    public CharacterWindow CharacterWindow => _character;
+
+    /// <summary>The inventory window, for the autopilot's screenshots.</summary>
+    public InventoryWindow InventoryWindow => _inventory;
 
     private (short X, short Z) KeyboardDirection()
     {
@@ -194,11 +262,24 @@ public partial class GameView : Node3D
                 case SystemNotice notice:
                     _hud.AddChat($"[color=#8af]{Escape(notice.Text)}[/color]");
                     break;
+                case CharacterChanged:
+                    if (_character.Visible)
+                    {
+                        _character.Refresh();
+                    }
+                    if (_inventory.Visible)
+                    {
+                        _inventory.Refresh(); // requirement checks use current stats
+                    }
+                    break;
+                case InventoryChanged when _inventory.Visible:
+                    _inventory.Refresh();
+                    break;
                 case ExperienceGained xp:
                     FloatingText.Spawn(this, _selfView!.Position, $"+{xp.Amount} XP", new Color(0.7f, 0.6f, 1f));
                     if (xp.LevelsGained > 0)
                     {
-                        _hud.AddChat($"[color=#c9f][b]Level {xp.Level}![/b] New skill points to spend: /train <Stat> <points>[/color]");
+                        _hud.AddChat($"[color=#c9f][b]Level {xp.Level}![/b] New skill points to spend: press C.[/color]");
                     }
                     break;
             }
@@ -240,6 +321,9 @@ public partial class GameView : Node3D
     {
         var status = World.Status;
         _hud.SetSelf(Session.CharacterName, status.Health, status.MaxHealth);
+        _hud.SetEnergy(status.Energy, status.MaxEnergy);
+        _hud.SetBuffs(ProtocolBarView.Buffs(ContentPacks.Embedded, World.Protocols, World.NowMs - World.ProtocolsReceivedMs), Session.CancelProtocol);
+        _protocolBar.Refresh();
         if (World.Build is { } build)
         {
             _hud.SetProgress(build.Level, build.Profession.Name, build.Xp, build.XpToNext, build.UnspentPoints);

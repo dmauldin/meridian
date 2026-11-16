@@ -16,12 +16,17 @@ public static class Controls
     public const string ClearTarget = "clear_target";
     public const string ToggleAttack = "toggle_attack";
     public const string OpenChat = "open_chat";
+    public const string ToggleCharacter = "toggle_character";
+    public const string ToggleInventory = "toggle_inventory";
+
+    /// <summary>Protocol bar hotkeys: "protocol_1" to "protocol_9".</summary>
+    public static string Protocol(int number) => $"protocol_{number}";
 
     /// <summary>Shown in the HUD's help panel.</summary>
     public const string HelpText =
         "WASD move   Right-drag look   Wheel zoom\n" +
         "Tab / Left-click target   Q auto-attack   Esc clear\n" +
-        "Enter chat";
+        "Enter chat   C character   I inventory   1-9 Protocols";
 
     public static void Register()
     {
@@ -33,6 +38,12 @@ public static class Controls
         Bind(ClearTarget, Key.Escape);
         Bind(ToggleAttack, Key.Q);
         Bind(OpenChat, Key.Enter, Key.KpEnter);
+        Bind(ToggleCharacter, Key.C);
+        Bind(ToggleInventory, Key.I);
+        for (var i = 1; i <= 9; i++)
+        {
+            Bind(Protocol(i), Key.Key0 + i);
+        }
     }
 
     private static void Bind(string action, params Key[] keys)

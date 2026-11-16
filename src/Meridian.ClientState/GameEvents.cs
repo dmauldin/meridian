@@ -19,6 +19,9 @@ public sealed record EntityKilled(uint EntityId, uint KillerId) : GameEvent;
 public sealed record ChatLine(uint FromEntityId, string From, string Text) : GameEvent;
 
 /// <summary>A system message for the chat log or a banner (disconnects, respawns).</summary>
+/// <summary>Level, XP, points or stats changed; read <see cref="ClientWorld.Build"/> and <see cref="ClientWorld.EffectiveStats"/>.</summary>
+public sealed record CharacterChanged : GameEvent;
+
 /// <summary>Known or running Protocols changed; read <see cref="ClientWorld.Protocols"/>.</summary>
 public sealed record ProtocolsChanged : GameEvent;
 

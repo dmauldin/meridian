@@ -9,9 +9,12 @@ namespace Meridian.Client;
 /// <c>godot --headless --path client -- --autopilot --user Ann --pass autopilot1 --auth http://host:5080/ --timeout 120</c>
 /// The account and its character are both named after <c>--user</c> and created on first run.
 /// Add <c>--screenshot shot.png</c> (with a real or virtual display) to save a frame 2 s into the fight,
-/// and <c>--profession Medic</c> to play another profession (default Operative).
+/// and <c>--profession Medic</c> to play another profession (default Operative). <c>--show-ui</c> opens the
+/// windows for that screenshot.
 /// </remarks>
-public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession)
+/// <param name="ShowUi">Before the screenshot, open the character and inventory windows, cast a Protocol on
+/// yourself and give yourself an item to inspect (needs the zone's MERIDIAN_DEV_COMMANDS=1).</param>
+public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession, bool ShowUi)
 {
     public static AutoPilotOptions? Parse(string[] args)
     {
@@ -31,7 +34,8 @@ public sealed record AutoPilotOptions(string AuthUrl, string Username, string Pa
             Arg("--pass", "autopilot1"),
             double.Parse(Arg("--timeout", "120"), System.Globalization.CultureInfo.InvariantCulture),
             Arg("--screenshot", "") is { Length: > 0 } shot ? shot : null,
-            Arg("--profession", "Operative"));
+            Arg("--profession", "Operative"),
+            args.Contains("--show-ui"));
     }
 }
 
@@ -49,6 +53,10 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
     private EntityKilled? _kill;
     private double _firstHitAt = -1;
     private bool _shotTaken;
+    private bool _uiShown;
+    private bool _itemSelected;
+    private int _pointsBefore = -1;
+    private bool _trainSeen;
 
     public override void _Ready() => view.WorldEvent += OnWorldEvent;
 
@@ -82,6 +90,31 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
         }
 
         var world = view.World;
+        if (options.ShowUi && !_uiShown && _firstHitAt >= 0)
+        {
+            _uiShown = true;
+            view.Session.Say("/give rifle.kestrel_mk2 1");
+            if (world.Protocols is { Known.Count: > 0 } known)
+            {
+                view.Session.Cast(known.Known[0], onSelf: true);
+            }
+            view.ToggleCharacter();
+            view.ToggleInventory();
+        }
+        if (_uiShown && _pointsBefore < 0 && world.Build is { } build && view.CharacterWindow.Click(Meridian.Core.Stats.Stat.Agility, 1))
+        {
+            _pointsBefore = build.UnspentPoints; // the server's next sheet must show the point spent
+        }
+        if (_pointsBefore >= 0 && !_trainSeen && world.Build is { } after && after.UnspentPoints < _pointsBefore)
+        {
+            _trainSeen = true;
+            GD.Print($"AUTOPILOT UI TRAIN ok: +1 Agility button, points {_pointsBefore} -> {after.UnspentPoints}");
+        }
+        if (_uiShown && !_itemSelected && world.Inventory?.Carried.Count > 0)
+        {
+            _itemSelected = true; // a frame or more before the shot, so the selection is drawn
+            view.InventoryWindow.SelectCarried(world.Inventory.Carried[^1].Position);
+        }
         if (options.ScreenshotPath is { } path && !_shotTaken && _firstHitAt >= 0 && _elapsed - _firstHitAt > 2)
         {
             _shotTaken = true;

@@ -11,6 +11,12 @@ config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 [display]
 window/size/viewport_width=1600
 window/size/viewport_height=900
+; UI is laid out for 1600x900 and scales with the window (3D renders at full resolution).
+; "expand" shows more of the world, not black bars, on other aspect ratios. src/WindowScale.cs
+; sizes the window for the monitor's DPI at startup.
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/dpi/allow_hidpi=true
 window/vsync/vsync_mode=1
 
 [dotnet]

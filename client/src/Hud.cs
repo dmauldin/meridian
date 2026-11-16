@@ -13,6 +13,10 @@ public partial class Hud : CanvasLayer
     private readonly Label _selfHealthText = new();
     private readonly Label _selfProgress = new() { Modulate = new Color(0.75f, 0.85f, 1f) };
     private readonly ProgressBar _selfXp = Bar(new Color(0.55f, 0.45f, 0.95f));
+    private readonly ProgressBar _selfEnergy = Bar(new Color(0.35f, 0.6f, 1f));
+    private readonly Label _selfEnergyText = new() { Modulate = new Color(0.7f, 0.82f, 1f) };
+    private readonly HFlowContainer _buffs = new();
+    private string _buffSignature = "";
     private readonly PanelContainer _targetPanel = new() { Visible = false };
     private readonly Label _targetName = new();
     private readonly ProgressBar _targetHealth = Bar(new Color(0.9f, 0.35f, 0.3f));
@@ -38,9 +42,14 @@ public partial class Hud : CanvasLayer
         selfBox.AddChild(_selfName);
         selfBox.AddChild(_selfHealth);
         selfBox.AddChild(_selfHealthText);
+        _selfEnergy.CustomMinimumSize = new Vector2(0, 10);
+        selfBox.AddChild(_selfEnergy);
+        selfBox.AddChild(_selfEnergyText);
         selfBox.AddChild(_selfProgress);
         _selfXp.CustomMinimumSize = new Vector2(0, 6);
         selfBox.AddChild(_selfXp);
+        _buffs.AddThemeConstantOverride("h_separation", 4);
+        selfBox.AddChild(_buffs);
 
         // Target frame, top-centre.
         _targetPanel.CustomMinimumSize = new Vector2(300, 0);
@@ -86,10 +95,49 @@ public partial class Hud : CanvasLayer
         _selfHealthText.Text = $"{Math.Max(0, health)} / {maxHealth}";
     }
 
+    public void SetEnergy(int energy, int maxEnergy)
+    {
+        _selfEnergy.MaxValue = Math.Max(1, maxEnergy);
+        _selfEnergy.Value = Math.Max(0, energy);
+        _selfEnergyText.Text = $"Energy {Math.Max(0, energy)} / {maxEnergy}";
+    }
+
+    /// <summary>Running Protocols as chips with a countdown; right-click one to drop it.</summary>
+    public void SetBuffs(IReadOnlyList<Meridian.ClientState.Views.BuffChip> buffs, Action<int> cancel)
+    {
+        ArgumentNullException.ThrowIfNull(buffs);
+        var signature = string.Join(',', buffs.Select(b => $"{b.ProtocolId}:{b.RemainingMs / 1000}"));
+        if (signature == _buffSignature)
+        {
+            return;
+        }
+        _buffSignature = signature;
+        foreach (var child in _buffs.GetChildren())
+        {
+            _buffs.RemoveChild(child);
+            child.QueueFree();
+        }
+        foreach (var b in buffs)
+        {
+            var chip = new Button
+            {
+                Text = $"{b.Name} {b.Countdown}",
+                FocusMode = Control.FocusModeEnum.None,
+                TooltipText = "Right-click to drop",
+                ButtonMask = MouseButtonMask.Right,
+            };
+            chip.AddThemeFontSizeOverride("font_size", 12);
+            chip.AddThemeColorOverride("font_color", b.RemainingMs < 30_000 ? new Color(1f, 0.75f, 0.4f) : new Color(0.75f, 0.9f, 1f));
+            var id = b.ProtocolId;
+            chip.Pressed += () => cancel(id);
+            _buffs.AddChild(chip);
+        }
+    }
+
     /// <summary>Level, profession, XP progress and unspent skill points under the health bar.</summary>
     public void SetProgress(int level, string profession, long xp, long xpToNext, int unspentPoints)
     {
-        var points = unspentPoints > 0 ? $"   {unspentPoints} skill points (/train)" : "";
+        var points = unspentPoints > 0 ? $"   {unspentPoints} skill points (C)" : "";
         _selfProgress.Text = $"Level {level} {profession}{points}";
         _selfXp.MaxValue = Math.Max(1, xpToNext);
         _selfXp.Value = xpToNext == 0 ? _selfXp.MaxValue : xp;

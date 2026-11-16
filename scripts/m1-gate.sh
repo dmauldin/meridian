@@ -45,11 +45,13 @@ grep -q "connected to zone" "$OUT/gateway.log" || { echo "gateway never reached 
 
 echo "running two headless clients on autopilot..."
 run_client() {
-  "$GODOT" --headless --path "$ROOT/client" -- --autopilot --user "$1" --pass autopilot1 --timeout "$TIMEOUT" >"$OUT/client-$1.log" 2>&1
+  local who="$1"; shift
+  "$GODOT" --headless --path "$ROOT/client" -- --autopilot --user "$who" --pass autopilot1 --timeout "$TIMEOUT" "$@" >"$OUT/client-$who.log" 2>&1
 }
 set +e
+# Bram also opens the windows and presses a real train button (M2.5 UI check).
 run_client Ann & a=$!
-run_client Bram & b=$!
+run_client Bram --show-ui & b=$!
 wait "$a"; a_exit=$?
 wait "$b"; b_exit=$?
 set -e
@@ -63,9 +65,10 @@ quarry_a=$(grep -oP 'AUTOPILOT KILL quarry=\K[0-9]+' "$OUT/client-Ann.log" || tr
 quarry_b=$(grep -oP 'AUTOPILOT KILL quarry=\K[0-9]+' "$OUT/client-Bram.log" || true)
 
 echo
-if [[ "$a_exit" == 0 && "$b_exit" == 0 && -n "$quarry_a" && "$quarry_a" == "$quarry_b" ]]; then
-  echo "M1 GATE: PASS (both clients hit and saw mob $quarry_a die)"
+ui_ok=$(grep -c "AUTOPILOT UI TRAIN ok" "$OUT/client-Bram.log" || true)
+if [[ "$a_exit" == 0 && "$b_exit" == 0 && -n "$quarry_a" && "$quarry_a" == "$quarry_b" && "$ui_ok" -ge 1 ]]; then
+  echo "M1 GATE: PASS (both clients hit and saw mob $quarry_a die; the character window's train button worked)"
   exit 0
 fi
-echo "M1 GATE: FAIL (exit codes $a_exit/$b_exit, quarries '$quarry_a'/'$quarry_b'); logs in $OUT"
+echo "M1 GATE: FAIL (exit codes $a_exit/$b_exit, quarries '$quarry_a'/'$quarry_b', ui check $ui_ok); logs in $OUT"
 exit 1

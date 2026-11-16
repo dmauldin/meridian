@@ -19,6 +19,7 @@ public partial class Main : Node
     public override void _Ready()
     {
         Controls.Register();
+        WindowScale.Apply(GetTree().Root);
         _autopilot = AutoPilotOptions.Parse(OS.GetCmdlineUserArgs());
         if (_autopilot is not null)
         {
