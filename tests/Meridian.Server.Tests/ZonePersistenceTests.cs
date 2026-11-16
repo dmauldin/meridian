@@ -216,6 +216,42 @@ public sealed class CharacterSaverTests : IDisposable
     }
 
     [Fact]
+    public async Task A_confirmed_save_completes_once_written()
+    {
+        var rook = await Created();
+        var confirmed = _saver.EnqueueAndConfirm(rook with { Xp = 11 });
+        Assert.False(confirmed.IsCompleted);
+        await _saver.WriteBatchAsync(Ct);
+        Assert.True(await confirmed);
+        Assert.Equal(11, (await _store.LoadCharacterAsync(rook.Id, Ct))!.Xp);
+    }
+
+    [Fact]
+    public async Task A_confirmed_save_waits_for_a_newer_queued_record_and_survives_store_failures()
+    {
+        var rook = await Created();
+        _store.FailNextSave = true;
+        var confirmed = _saver.EnqueueAndConfirm(rook with { Xp = 1 });
+        await _saver.WriteBatchAsync(Ct);                       // fails, stays queued
+        Assert.False(confirmed.IsCompleted);
+        _saver.Enqueue(rook with { Xp = 2 });                   // newer replaces it
+        await _saver.WriteBatchAsync(Ct);
+        Assert.True(await confirmed);
+        Assert.Equal(2, (await _store.LoadCharacterAsync(rook.Id, Ct))!.Xp);
+    }
+
+    [Fact]
+    public async Task A_confirmed_save_reports_a_character_owned_elsewhere()
+    {
+        var rook = await Created();
+        await _store.SaveCharactersAsync([rook with { Xp = 777 }], Ct);
+        var confirmed = _saver.EnqueueAndConfirm(rook with { Xp = 1 });
+        await _saver.WriteBatchAsync(Ct);
+        Assert.False(await confirmed);
+        Assert.False(await _saver.EnqueueAndConfirm(rook)); // lost: refused at once
+    }
+
+    [Fact]
     public async Task Flush_waits_for_the_background_loop()
     {
         var rook = await Created();
@@ -277,12 +313,13 @@ public sealed class PlayerSessionTests : IDisposable
     private readonly CharacterSaver _saver;
     private readonly ZoneSimulation _sim = new(new ZoneOptions { MobCount = 0, Seed = 3 }, new RecordingOutbox());
     private readonly List<(ClientRef Client, string Reason)> _dropped = [];
+    private readonly List<(ClientRef Client, uint Zone)> _transfers = [];
     private readonly PlayerSessions _sessions;
 
     public PlayerSessionTests()
     {
         _saver = new CharacterSaver(_store, _ => { });
-        _sessions = new PlayerSessions(_sim, _store, _saver, (c, r) => _dropped.Add((c, r)), _ => { });
+        _sessions = new PlayerSessions(_sim, _store, _saver, (c, r) => _dropped.Add((c, r)), _ => { }, (c, z) => _transfers.Add((c, z)));
     }
 
     public void Dispose() => _saver.Dispose();
@@ -372,6 +409,32 @@ public sealed class PlayerSessionTests : IDisposable
         PumpUntil(() => _dropped.Count == 2);
         Assert.All(_dropped, d => Assert.Equal("Character not found.", d.Reason));
         Assert.Equal(0, _sim.PlayerCount);
+    }
+
+    [Fact]
+    public async Task A_departure_is_saved_into_the_destination_before_the_client_is_transferred()
+    {
+        var rook = await Created();
+        _sessions.BeginJoin(A, rook.AccountId, rook.Id);
+        PumpUntil(() => _sim.FindCharacter(rook.Id) is not null);
+        for (var i = 0; i < ZoneSimulation.ExitGraceTicks; i++)
+        {
+            _sim.Step();
+        }
+        var exit = Meridian.Content.ContentPacks.Embedded.Zones["glasswind_flats"].Exits.Single();
+        _sim.FindCharacter(rook.Id)!.Position = exit.Area.Center;
+        _sim.Step();
+
+        using var stop = new CancellationTokenSource();
+        var loop = Task.Run(() => _saver.RunAsync(stop.Token), Ct);
+        _sessions.ProcessDepartures();
+        PumpUntil(() => _transfers.Count == 1);
+        Assert.Equal((A, Meridian.Content.ContentPacks.Embedded.Zones["rustfall_basin"].Id), _transfers[0]);
+        var stored = (await _store.LoadCharacterAsync(rook.Id, Ct))!;
+        Assert.Equal(("rustfall_basin", exit.Arrive), (stored.Placement!.Zone, stored.Placement.Position)); // saved before the transfer
+        Assert.Empty(_dropped);
+        await stop.CancelAsync();
+        await loop;
     }
 
     [Fact]

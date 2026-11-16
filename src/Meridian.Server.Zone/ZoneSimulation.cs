@@ -205,6 +205,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             player.Health = player.MaxHealth; // after items: they can raise the maximum
         }
         player.LastCheckedStatsRevision = player.Character.Stats.Revision;
+        player.ExitGraceUntilTick = Tick + ExitGraceTicks;
         player.LastSavedKey = player.SaveKey;
         if (record.Id != 0)
         {
@@ -289,23 +290,33 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
 
     public bool Leave(ClientRef client)
     {
-        if (!_byClient.Remove(client, out var player))
+        if (!_byClient.TryGetValue(client, out var player))
         {
             return false;
         }
+        Remove(player, player.CharacterId != 0 ? Snapshot(player) : null); // always save on leave, changed or not
+        return true;
+    }
+
+    /// <summary>Takes a player out of the world, queueing <paramref name="finalSave"/> if given.</summary>
+    private void Remove(Player player, CharacterRecord? finalSave)
+    {
+        _byClient.Remove(player.Client);
         _players.Remove(player);
         _entities.Remove(player);
         _byId.Remove(player.EntityId);
         if (player.CharacterId != 0)
         {
             _byCharacter.Remove(player.CharacterId);
-            _checkpoints.Add(Snapshot(player)); // always save on leave, changed or not
+        }
+        if (finalSave is not null)
+        {
+            _checkpoints.Add(finalSave);
         }
         foreach (var mob in _mobs)
         {
             mob.Threat.Remove(player.EntityId);
         }
-        return true;
     }
 
     /// <summary>Removes every player that came through <paramref name="gatewayId"/> (the gateway went away).</summary>
@@ -337,6 +348,7 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
         StepMobs();
         MoveEntities();
         StepCombat();
+        CheckExits();
 
         foreach (var p in _players)
         {

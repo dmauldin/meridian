@@ -135,6 +135,19 @@ public sealed partial class ZoneSimulation
                 var at = p.Outfit.Add(item);
                 SendNotice(p, at >= 0 ? NoticeInfo : NoticeRefused, at >= 0 ? $"Given {Describe(item)}." : "Your inventory is full.");
                 return;
+            case ["/goto", var xText, var zText] when _options.DevCommands:
+                if (!double.TryParse(xText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var x)
+                    || !double.TryParse(zText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var z)
+                    || !double.IsFinite(x) || !double.IsFinite(z))
+                {
+                    SendNotice(p, NoticeRefused, "Usage: /goto <x metres> <z metres>");
+                    return;
+                }
+                // Clamped to the zone; the client's prediction snaps to it on the next snapshot.
+                p.Position = _zone.Bounds.Clamp(new Meridian.Core.World.Position(
+                    (int)Math.Clamp(x * 1000, int.MinValue, int.MaxValue), (int)Math.Clamp(z * 1000, int.MinValue, int.MaxValue)));
+                SendNotice(p, NoticeInfo, $"Moved to {p.Position.X / 1000} m, {p.Position.Z / 1000} m.");
+                return;
             default:
                 SendNotice(p, NoticeRefused, $"Unknown command {parts[0]}.");
                 return;

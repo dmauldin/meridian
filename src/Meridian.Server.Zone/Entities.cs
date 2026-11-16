@@ -122,6 +122,9 @@ public sealed class Player : Entity
     /// <summary>The outfit revision last sent as <c>InventoryState</c>; -1 forces a send.</summary>
     internal long LastSentOutfitRevision { get; set; } = -1;
 
+    /// <summary>Exits are ignored until this tick (just arrived, or just joined).</summary>
+    internal long ExitGraceUntilTick { get; set; }
+
     /// <summary>The stats revision worn items were last re-checked against.</summary>
     internal long LastCheckedStatsRevision { get; set; } = -1;
 

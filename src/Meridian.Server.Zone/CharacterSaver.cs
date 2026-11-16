@@ -19,6 +19,7 @@ public sealed class CharacterSaver(IGameStore store, Action<string> log) : IDisp
     private readonly Dictionary<ulong, CharacterRecord> _inFlight = [];  // being written now
     private readonly Dictionary<ulong, long> _versions = [];             // version the store holds, as far as we know
     private readonly HashSet<ulong> _lost = [];
+    private readonly Dictionary<ulong, List<TaskCompletionSource<bool>>> _confirmations = [];
     private readonly SemaphoreSlim _wake = new(0);
     private TaskCompletionSource _idle = NewIdle();
 
@@ -76,6 +77,32 @@ public sealed class CharacterSaver(IGameStore store, Action<string> log) : IDisp
             _pending[record.Id] = record;
         }
         _wake.Release();
+    }
+
+    /// <summary>
+    /// Queues <paramref name="record"/> and completes when it (or a newer record for the same
+    /// character) is in the store: true when written, false if the character turned out to be
+    /// owned elsewhere or no longer exists. Store failures keep retrying, so callers add a timeout.
+    /// Used for zone hand-offs, where the destination must load exactly this save.
+    /// </summary>
+    public Task<bool> EnqueueAndConfirm(CharacterRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock)
+        {
+            if (record.Id == 0 || _lost.Contains(record.Id))
+            {
+                return Task.FromResult(false);
+            }
+            if (!_confirmations.TryGetValue(record.Id, out var waiting))
+            {
+                _confirmations[record.Id] = waiting = [];
+            }
+            waiting.Add(done);
+        }
+        Enqueue(record);
+        return done.Task;
     }
 
     /// <summary>Completes when everything queued so far is written (or <paramref name="timeout"/> passes).</summary>
@@ -153,11 +180,17 @@ public sealed class CharacterSaver(IGameStore store, Action<string> log) : IDisp
         }
 
         var lost = new List<ulong>();
+        var confirmed = new List<(TaskCompletionSource<bool> Done, bool Saved)>();
         lock (_lock)
         {
             foreach (var outcome in outcomes)
             {
                 _inFlight.Remove(outcome.Id);
+                // Confirm waiters once nothing newer for this character is still queued.
+                if ((!outcome.Saved || !_pending.ContainsKey(outcome.Id)) && _confirmations.Remove(outcome.Id, out var waiting))
+                {
+                    confirmed.AddRange(waiting.Select(w => (w, outcome.Saved)));
+                }
                 if (outcome.Saved)
                 {
                     _versions[outcome.Id] = outcome.Version!.Value;
@@ -175,6 +208,10 @@ public sealed class CharacterSaver(IGameStore store, Action<string> log) : IDisp
             {
                 _idle.TrySetResult();
             }
+        }
+        foreach (var (done, saved) in confirmed)
+        {
+            done.TrySetResult(saved);
         }
         foreach (var id in lost)
         {

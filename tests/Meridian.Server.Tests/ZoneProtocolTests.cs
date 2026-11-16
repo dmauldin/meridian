@@ -175,7 +175,8 @@ public class ZoneProtocolTests
         var outbox = new RecordingOutbox();
         var sim = new ZoneSimulation(new ZoneOptions { MobCount = 1, Seed = 3 }, outbox);
         var mob = sim.Mobs[0];
-        var op = sim.Join(OperativeClient, Record(2, "Oren", Profession.Operative))!;
+        // Unstored: such characters never use exits, wherever the mob happens to stand.
+        var op = sim.Join(OperativeClient, 2, "Oren", Profession.Operative);
         op.Position = mob.Position with { X = mob.Position.X + 2_000 };
         Cast(sim, OperativeClient, RifleEnh, null);
         op.Health = 1; // one bite from death
