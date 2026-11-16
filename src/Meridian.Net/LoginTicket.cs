@@ -11,7 +11,8 @@ namespace Meridian.Net;
 /// <param name="SessionKey">32-byte key the client also received over TLS.</param>
 /// <param name="ExpiresAt">Unix seconds after which the gateway refuses the ticket.</param>
 /// <param name="CharacterId">The stored character this session plays; auth checked it belongs to the account.</param>
-public sealed record LoginTicket(ulong TicketId, ulong AccountId, string CharacterName, byte[] SessionKey, long ExpiresAt, ulong CharacterId);
+/// <param name="ZoneId">The zone to join: where the character was saved, or the start zone.</param>
+public sealed record LoginTicket(ulong TicketId, ulong AccountId, string CharacterName, byte[] SessionKey, long ExpiresAt, ulong CharacterId, uint ZoneId);
 
 /// <summary>
 /// Seals tickets with a key shared only by auth and gateway (ChaCha20-Poly1305, random nonce).
@@ -24,9 +25,9 @@ public sealed class TicketSealer : IDisposable
     private const int TagBytes = 16;
     private const int MaxNameBytes = 32;
 
-    /// <summary>ticket id, account, expiry, character (8 each), name length (1).</summary>
-    private const int HeaderBytes = 8 + 8 + 8 + 8 + 1;
-    private const int NameLengthAt = 32;
+    /// <summary>ticket id, account, expiry, character (8 each), zone (4), name length (1).</summary>
+    private const int HeaderBytes = 8 + 8 + 8 + 8 + 4 + 1;
+    private const int NameLengthAt = 36;
 
     private readonly ChaCha20Poly1305 _aead;
 
@@ -54,6 +55,7 @@ public sealed class TicketSealer : IDisposable
         BinaryPrimitives.WriteUInt64LittleEndian(p[8..], ticket.AccountId);
         BinaryPrimitives.WriteInt64LittleEndian(p[16..], ticket.ExpiresAt);
         BinaryPrimitives.WriteUInt64LittleEndian(p[24..], ticket.CharacterId);
+        BinaryPrimitives.WriteUInt32LittleEndian(p[32..], ticket.ZoneId);
         p[NameLengthAt] = (byte)name.Length;
         name.CopyTo(p[HeaderBytes..]);
         ticket.SessionKey.CopyTo(p[(HeaderBytes + name.Length)..]);
@@ -96,7 +98,8 @@ public sealed class TicketSealer : IDisposable
             Encoding.UTF8.GetString(p.Slice(HeaderBytes, nameLength)),
             p.Slice(HeaderBytes + nameLength, SessionCipher.KeyBytes).ToArray(),
             BinaryPrimitives.ReadInt64LittleEndian(p[16..]),
-            BinaryPrimitives.ReadUInt64LittleEndian(p[24..]));
+            BinaryPrimitives.ReadUInt64LittleEndian(p[24..]),
+            BinaryPrimitives.ReadUInt32LittleEndian(p[32..]));
         CryptographicOperations.ZeroMemory(plain);
         return ticket;
     }

@@ -3,6 +3,8 @@
 
 # Used when no active weapon is in hand (none worn, or the worn one is inactive).
 unarmed: unarmed.fists
+# The zone a new character first enters.
+start_zone: glasswind_flats
 # Inventory positions besides what is worn.
 inventory_slots: 30
 

@@ -15,6 +15,12 @@ public readonly record struct Position(int X, int Z)
 public readonly record struct ZoneBounds(int MinX, int MinZ, int MaxX, int MaxZ)
 {
     public Position Clamp(Position p) => new(Math.Clamp(p.X, MinX, MaxX), Math.Clamp(p.Z, MinZ, MaxZ));
+
+    public bool Contains(Position p) => p.X >= MinX && p.X <= MaxX && p.Z >= MinZ && p.Z <= MaxZ;
+
+    public bool Within(ZoneBounds outer) => MinX >= outer.MinX && MaxX <= outer.MaxX && MinZ >= outer.MinZ && MaxZ <= outer.MaxZ;
+
+    public Position Center => new((MinX / 2) + (MaxX / 2), (MinZ / 2) + (MaxZ / 2));
 }
 
 /// <summary>

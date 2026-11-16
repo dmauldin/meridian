@@ -31,3 +31,39 @@
     - { item: armor.marksman_gloves, chance: 1500, ql_spread: 2 }
     - { item: implant.ocular_reflex, chance: 1000, ql_spread: 2 }
     - { item: rifle.kestrel_mk2, chance: 500, ql_spread: 2 }
+
+# Rustfall Basin's grazer: slower, tougher and harder-hitting than the skitter; drops
+# Protocol items as well as gear.
+- id: 2
+  key: mob.rustfall_strider
+  name: Rustfall Strider
+  level: 6
+  stats:
+    BodyDevelopment: 55
+    Stamina: 45
+    Unarmed: 60
+    MeleeInit: 10
+    EvadeRanged: 30
+    EvadeClose: 30
+    ProjectileAC: 25
+    MeleeAC: 25
+  attack:
+    name: Iron Hooves
+    attack_skill: Unarmed
+    initiative: MeleeInit
+    defence: EvadeClose
+    damage_type: Melee
+    attack_time_ms: 2600
+    range_m: 3
+    min_damage: 9
+    max_damage: 20
+  aggro_m: 7
+  leash_m: 35
+  speed_m_s: 3.5
+  respawn_s: 15
+  xp: 260
+  loot:
+    - { item: armor.marksman_gloves, chance: 2000, ql_spread: 3 }
+    - { item: rifle.kestrel_mk2, chance: 1000, ql_spread: 3 }
+    - { item: protocol.rifle_enhancement_1, chance: 600, ql_spread: 0 }
+    - { item: protocol.reflex_boost_1, chance: 600, ql_spread: 0 }

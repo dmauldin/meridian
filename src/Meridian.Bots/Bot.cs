@@ -27,7 +27,9 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     private long _nextMove, _nextTurn, _nextPing, _nextChat, _nextThink;
     private short _dirX, _dirZ;
     private uint _sequence;
+    private const int ExitAvoidMm = 20_000;
     private Position _position;
+    private IReadOnlyList<Meridian.Core.Content.ZoneExit> _exits = [];
     private uint _target;
     private bool _attacking;
 
@@ -96,6 +98,7 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
 
         if (now >= _nextMove)
         {
+            AvoidExits();
             // 10 Hz input, matching what a real client sends while a key is held.
             Connection.Send(new MoveIntent { Sequence = ++_sequence, DirX = _dirX, DirZ = _dirZ });
             _nextMove = now + (100 * ms);
@@ -114,6 +117,37 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
             _nextChat = now + (_rng.Next(20_000, 40_000) * ms);
         }
     }
+
+    /// <summary>
+    /// Load bots stay in their zone: within 20 m of an exit they head straight away from it
+    /// (a hunt target there is dropped). Crossing zones is the hand-off gate's job, not theirs.
+    /// </summary>
+    private void AvoidExits()
+    {
+        foreach (var exit in _exits)
+        {
+            var center = exit.Area.Center;
+            if (_position.DistanceSquared(center) < (long)ExitAvoidMm * ExitAvoidMm)
+            {
+                var away = new Position((2 * _position.X) - center.X, (2 * _position.Z) - center.Z);
+                (_dirX, _dirZ) = Movement.DirectionTowards(_position, away);
+                _target = 0;
+                return;
+            }
+        }
+    }
+
+    /// <summary>Counts zone changes (load bots should never make one) and waits for the next Welcome.</summary>
+    public void OnZoneChange(GameConnection context, in ZoneChange message)
+    {
+        ZoneChanges++;
+        Welcomed = false;
+        _world.Clear();
+        _assembler.Reset(); // the next zone's ticks are unrelated to this one's
+        _target = 0;
+    }
+
+    public int ZoneChanges { get; private set; }
 
     private void Hunt()
     {
@@ -161,6 +195,7 @@ internal sealed class Bot : IClientBoundHandler<GameConnection>, IDisposable
     {
         EntityId = message.EntityId;
         _position = new Position(message.X, message.Z);
+        _exits = Meridian.Content.ContentPacks.Embedded.Zones.TryGet((int)message.ZoneId, out var zone) ? zone.Exits : [];
         Welcomed = true;
     }
 

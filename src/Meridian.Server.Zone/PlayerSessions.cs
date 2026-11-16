@@ -15,12 +15,14 @@ public sealed class PlayerSessions
     private readonly IGameStore _store;
     private readonly CharacterSaver _saver;
     private readonly Action<ClientRef, string> _drop;
+    private readonly Action<ClientRef, uint> _transfer;
     private readonly Action<string> _log;
     private readonly ConcurrentQueue<Action> _onTickThread = new();
     private readonly Dictionary<ClientRef, ulong> _pendingJoins = [];
 
     /// <param name="drop">Ends a client's session with a reason it can show (sent via its gateway).</param>
-    public PlayerSessions(ZoneSimulation sim, IGameStore store, CharacterSaver saver, Action<ClientRef, string> drop, Action<string> log)
+    /// <param name="transfer">Asks the client's gateway to route it to another zone (its character is saved there).</param>
+    public PlayerSessions(ZoneSimulation sim, IGameStore store, CharacterSaver saver, Action<ClientRef, string> drop, Action<string> log, Action<ClientRef, uint>? transfer = null)
     {
         ArgumentNullException.ThrowIfNull(saver);
         _sim = sim;
@@ -28,6 +30,7 @@ public sealed class PlayerSessions
         _saver = saver;
         _drop = drop;
         _log = log;
+        _transfer = transfer ?? ((_, _) => { });
         saver.OwnershipLost += id => _onTickThread.Enqueue(() =>
         {
             if (_sim.FindCharacter(id) is { } p)
@@ -39,6 +42,40 @@ public sealed class PlayerSessions
     }
 
     public int PendingJoins => _pendingJoins.Count;
+
+    /// <summary>How long a departure waits for its save before the client is dropped instead.</summary>
+    public TimeSpan DepartureSaveTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Hands each departure to the destination: save the character (already placed there) and,
+    /// once the store confirms it, ask the gateway to re-route the client. The destination then
+    /// loads exactly that save. If the save cannot be confirmed the client is dropped: logging in
+    /// again puts them wherever the store says. Call on the tick thread after each step.
+    /// </summary>
+    public void ProcessDepartures()
+    {
+        foreach (var departure in _sim.DrainDepartures())
+        {
+            var saved = _saver.EnqueueAndConfirm(departure.Record);
+            _ = Task.Run(async () =>
+            {
+                var finished = await Task.WhenAny(saved, Task.Delay(DepartureSaveTimeout)).ConfigureAwait(false);
+                var ok = finished == saved && await saved.ConfigureAwait(false);
+                _onTickThread.Enqueue(() =>
+                {
+                    if (ok)
+                    {
+                        _transfer(departure.Client, departure.ToZoneId);
+                    }
+                    else
+                    {
+                        _log($"hand-off of character {departure.Record.Id} to zone {departure.ToZoneId} could not be saved");
+                        _drop(departure.Client, "Travel failed. Please log in again.");
+                    }
+                });
+            });
+        }
+    }
 
     /// <summary>Runs work posted from other threads (finished loads). Call on the tick thread.</summary>
     public void RunQueued()

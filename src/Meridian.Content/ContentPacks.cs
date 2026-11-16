@@ -78,7 +78,7 @@ public static class ContentPacks
             dto.Professions.Select(ToModel),
             dto.Origins.Select(ToModel),
             ToModel(dto.Progression),
-            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character"), dto.NewCharacter.Unarmed, dto.NewCharacter.InventorySlots),
+            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character"), dto.NewCharacter.Unarmed, dto.NewCharacter.InventorySlots, dto.NewCharacter.StartZone),
             hash);
     }
 
@@ -96,7 +96,7 @@ public static class ContentPacks
             pack.Professions.All.Select(ToDto).ToList(),
             pack.Origins.All.Select(ToDto).ToList(),
             ToDto(pack.Progression),
-            new NewCharacterDto(Sorted(pack.NewCharacter.Stats), pack.NewCharacter.UnarmedKey, pack.NewCharacter.InventorySlots));
+            new NewCharacterDto(Sorted(pack.NewCharacter.Stats), pack.NewCharacter.UnarmedKey, pack.NewCharacter.InventorySlots, pack.NewCharacter.StartZoneKey));
     }
 
     // ------------------------------------------------------------------ DTO -> model
@@ -189,7 +189,8 @@ public static class ContentPacks
     public static ZoneDef ToModel(ZoneDto d) => new(
         d.Id, d.Key, d.Name,
         new ZoneBounds(d.Bounds.MinX, d.Bounds.MinZ, d.Bounds.MaxX, d.Bounds.MaxZ),
-        d.Spawns.Select(s => new SpawnGroup(s.MobKey, s.Count, new Position(s.CenterX, s.CenterZ), s.InnerRadiusMm, s.OuterRadiusMm)).ToList());
+        d.Spawns.Select(s => new SpawnGroup(s.MobKey, s.Count, new Position(s.CenterX, s.CenterZ), s.InnerRadiusMm, s.OuterRadiusMm)).ToList(),
+        (d.Exits ?? []).Select(e => new ZoneExit(e.ToZone, new ZoneBounds(e.Area.MinX, e.Area.MinZ, e.Area.MaxX, e.Area.MaxZ), new Position(e.ArriveX, e.ArriveZ))).ToList());
 
     // ------------------------------------------------------------------ model -> DTO
 
@@ -239,7 +240,8 @@ public static class ContentPacks
     private static ZoneDto ToDto(ZoneDef z) => new(
         z.Id, z.Key, z.Name,
         new BoundsDto(z.Bounds.MinX, z.Bounds.MinZ, z.Bounds.MaxX, z.Bounds.MaxZ),
-        z.Spawns.Select(s => new SpawnDto(s.MobKey, s.Count, s.Center.X, s.Center.Z, s.InnerRadiusMm, s.OuterRadiusMm)).ToList());
+        z.Spawns.Select(s => new SpawnDto(s.MobKey, s.Count, s.Center.X, s.Center.Z, s.InnerRadiusMm, s.OuterRadiusMm)).ToList(),
+        z.Exits.Select(e => new ExitDto(e.ToZoneKey, new BoundsDto(e.Area.MinX, e.Area.MinZ, e.Area.MaxX, e.Area.MaxZ), e.Arrive.X, e.Arrive.Z)).ToList());
 
     // ------------------------------------------------------------------ helpers
 

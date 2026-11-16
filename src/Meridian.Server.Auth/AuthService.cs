@@ -158,7 +158,8 @@ public sealed class AuthService(AuthOptions options, IGameStore store, PasswordH
             character.Name,
             sessionKey,
             clock.GetUtcNow().Add(options.TicketLifetime).ToUnixTimeSeconds(),
-            character.Id);
+            character.Id,
+            ZoneFor(character));
         byte[] sealedTicket;
         lock (_sealLock)
         {
@@ -172,6 +173,12 @@ public sealed class AuthService(AuthOptions options, IGameStore store, PasswordH
             Convert.ToBase64String(sessionKey),
             Convert.ToBase64String(sealedTicket)));
     }
+
+    /// <summary>The zone the character was saved in, else (new, or that zone no longer exists) the start zone.</summary>
+    private uint ZoneFor(CharacterRecord character) =>
+        character.Placement is { } placed && content.Zones.TryGet(placed.Zone, out var zone)
+            ? zone.Id
+            : content.Zones[content.NewCharacter.StartZoneKey].Id;
 
     private ulong? AccountFor(string? token)
     {

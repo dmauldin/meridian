@@ -74,7 +74,7 @@ public static class Compiler
         var newCharacterFile = Path.Combine(contentDirectory, "new_character.yaml");
         if (Load<NewCharacterYaml>(newCharacterFile, errors) is { } nc)
         {
-            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal), nc.Unarmed, nc.InventorySlots);
+            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal), nc.Unarmed, nc.InventorySlots, nc.StartZone);
         }
 
         var professions = new List<ProfessionDto>();
@@ -246,6 +246,12 @@ public static class Compiler
             Require(s.Ring.Inner <= s.Ring.Outer, "ring_m inner cannot exceed outer");
             return new SpawnDto(s.Mob, s.Count, Mm(s.Center.X, "center_m", signed: true), Mm(s.Center.Z, "center_m", signed: true),
                 Mm(s.Ring.Inner, "ring_m", allowZero: true), Mm(s.Ring.Outer, "ring_m"));
+        }).ToList(), y.Exits.Select(e =>
+        {
+            var area = new BoundsDto(Mm(e.Area.MinX, "area_m", signed: true), Mm(e.Area.MinZ, "area_m", signed: true),
+                Mm(e.Area.MaxX, "area_m", signed: true), Mm(e.Area.MaxZ, "area_m", signed: true));
+            Require(area.MinX < area.MaxX && area.MinZ < area.MaxZ, "area_m must have min < max");
+            return new ExitDto(e.To, area, Mm(e.Arrive.X, "arrive_m", signed: true), Mm(e.Arrive.Z, "arrive_m", signed: true));
         }).ToList());
     }
 

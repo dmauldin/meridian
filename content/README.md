@@ -36,5 +36,8 @@ Rules:
 - `items/protocols.yaml`: Protocol items have `protocol:` (the Protocol key) and no `slot`.
 - `professions.yaml`: `starting_protocols` lists Protocol keys every new character of that
   profession knows; each must be castable by the profession.
-- `new_character.yaml`: `unarmed` is the weapon item used when no active weapon is worn;
+- `zones`: `bounds_m` is the playable area; `spawns` place mobs. `exits` lead to other zones:
+  `to` (zone key), `area_m` (the pad, inside this zone) and `arrive_m` (where the player
+  appears, inside the destination and outside its exits, so nobody arrives on a pad).
+- `new_character.yaml`: `start_zone` is where new characters appear; `unarmed` is the weapon item used when no active weapon is worn;
   `inventory_slots` is how many items a character carries besides what it wears.

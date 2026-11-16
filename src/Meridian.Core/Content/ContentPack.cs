@@ -85,6 +85,29 @@ public sealed class ContentPack
         {
             throw new InvalidDataException($"new_character: unarmed '{NewCharacter.UnarmedKey}' is not a weapon item.");
         }
+        if (!Zones.ContainsKey(NewCharacter.StartZoneKey))
+        {
+            throw new InvalidDataException($"new_character: unknown start_zone '{NewCharacter.StartZoneKey}'.");
+        }
+        foreach (var zone in Zones.All)
+        {
+            foreach (var exit in zone.Exits)
+            {
+                if (!Zones.TryGet(exit.ToZoneKey, out var to) || to.Id == zone.Id)
+                {
+                    throw new InvalidDataException($"zone '{zone.Key}': exit to unknown or same zone '{exit.ToZoneKey}'.");
+                }
+                if (!exit.Area.Within(zone.Bounds))
+                {
+                    throw new InvalidDataException($"zone '{zone.Key}': exit to '{to.Key}' lies outside the zone.");
+                }
+                // Arriving inside an exit would bounce the player straight back.
+                if (!to.Bounds.Contains(exit.Arrive) || to.Exits.Any(e => e.Area.Contains(exit.Arrive)))
+                {
+                    throw new InvalidDataException($"zone '{zone.Key}': arrival in '{to.Key}' must be inside it and outside its exits.");
+                }
+            }
+        }
         if (NewCharacter.InventorySlots is < 1 or > 120)
         {
             throw new InvalidDataException("new_character: inventory_slots must be 1..120.");

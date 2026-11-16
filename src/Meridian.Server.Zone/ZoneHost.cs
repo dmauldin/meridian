@@ -48,13 +48,15 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
         _log = log ?? Console.WriteLine;
         Simulation = new ZoneSimulation(options.Zone, this);
         _saver = new CharacterSaver(store, _log);
-        _sessions = new PlayerSessions(Simulation, store, _saver, Drop, _log);
+        _sessions = new PlayerSessions(Simulation, store, _saver, Drop, _log, Transfer);
 
         var listener = new EventBasedNetListener();
         listener.ConnectionRequestEvent += r => r.AcceptIfKey(_options.InternalKey);
         listener.PeerConnectedEvent += p =>
         {
             _gateways[p.Id] = p;
+            // First message on the link: which zone this is, so a misrouted gateway can refuse it.
+            p.Send(Envelope.ToArray(new ZoneHello { ZoneId = Simulation.Zone.Id }), 1, DeliveryMethod.ReliableOrdered);
             _log($"gateway {p.Id} connected from {p}");
         };
         listener.PeerDisconnectedEvent += (p, info) =>
@@ -114,6 +116,7 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
             var start = Stopwatch.GetTimestamp();
             Simulation.Step();
             _sessions.QueueCheckpoints();
+            _sessions.ProcessDepartures();
             var end = Stopwatch.GetTimestamp();
             var workMs = (end - start) * 1000.0 / Stopwatch.Frequency;
             var overran = end > nextTick + tickTicks;
@@ -175,6 +178,22 @@ public sealed class ZoneHost : IZoneOutbox, IInternalHandler<NetPeer>, IDisposab
 
     public void OnDropClient(NetPeer context, in DropClient message) =>
         _log($"gateway {context.Id} sent DropClient, which only flows zone → gateway");
+
+    /// <summary>Tells the client's gateway to route it to another zone.</summary>
+    private void Transfer(ClientRef client, uint zoneId)
+    {
+        if (_gateways.TryGetValue(client.GatewayId, out var gateway))
+        {
+            var bytes = Envelope.ToArray(new TransferClient { ConnectionId = client.ConnectionId, ZoneId = zoneId });
+            gateway.Send(bytes, 1, DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    public void OnTransferClient(NetPeer context, in TransferClient message) =>
+        _log($"gateway {context.Id} sent TransferClient, which only flows zone → gateway");
+
+    public void OnZoneHello(NetPeer context, in ZoneHello message) =>
+        _log($"gateway {context.Id} sent ZoneHello, which only flows zone → gateway");
 
     /// <summary>Asks the client's gateway to end its session with a reason the player sees.</summary>
     private void Drop(ClientRef client, string reason)

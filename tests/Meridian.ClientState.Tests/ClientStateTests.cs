@@ -149,6 +149,7 @@ public class ClientWorldTests
     {
         var w = new ClientWorld { NowMs = 1_000 };
         w.OnWelcome(null!, new Welcome { EntityId = 1, TickRateHz = 20, ServerTick = 100, X = 0, Z = 0, ContentHash = w.ContentHash });
+        w.DrainEvents(); // ZoneEntered: tests start from a quiet, joined world
         return w;
     }
 

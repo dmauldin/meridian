@@ -403,6 +403,10 @@ public sealed class EndToEndTests : IDisposable
 
         public void OnInventoryState(GameConnection context, in InventoryState message) => Inventory = message;
 
+        public List<uint> ZoneChanges { get; } = [];
+
+        public void OnZoneChange(GameConnection context, in ZoneChange message) => ZoneChanges.Add(message.ZoneId);
+
         public ProtocolState? Protocols { get; private set; }
 
         public void OnProtocolState(GameConnection context, in ProtocolState message) => Protocols = message;

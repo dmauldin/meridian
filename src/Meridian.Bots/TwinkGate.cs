@@ -13,8 +13,9 @@ namespace Meridian.Bots;
 /// A fresh Operative (Rifle 30, Agility 20) gets a QL 1 Kestrel Mk2 (Rifle 40, Agility 30). With
 /// its own Rifle Enhancement it still lacks Agility, and the equip is refused. A Medic walks over
 /// and casts Reflex Boost (+20 Agility) on it; now the equip succeeds and the rifle is active.
-/// When the Operative drops the Medic's buff, the rifle stays worn but goes inactive.
-/// Needs the zone started with MERIDIAN_DEV_COMMANDS=1 (for /give).
+/// The Operative then walks into the next zone: the rifle and both buffs arrive with it, still
+/// active, on the same connection. When it drops the Medic's buff there, the rifle stays worn but
+/// goes inactive. Needs both zones running, with MERIDIAN_DEV_COMMANDS=1 (for /give).
 /// </summary>
 public static class TwinkGate
 {
@@ -27,11 +28,12 @@ public static class TwinkGate
         var notices = new List<string>();
         var steps = new List<string>();
 
+        (short, short) opSteer = (0, 0);
         void Pump(short medicX = 0, short medicZ = 0)
         {
             var now = clock.Elapsed.TotalMilliseconds;
             medic.Update(now, medicX, medicZ);
-            op.Update(now, 0, 0);
+            op.Update(now, opSteer.Item1, opSteer.Item2);
             medic.World.DrainEvents();
             foreach (var e in op.World.DrainEvents())
             {
@@ -128,6 +130,36 @@ public static class TwinkGate
             return 1;
         }
 
+        // Zone hand-off: walk the twinked Operative onto the transit pad into Rustfall Basin. The
+        // rifle, its own buff and the Medic's buff must all arrive with it, still active.
+        var pack = Meridian.Content.ContentPacks.Embedded;
+        var startZone = op.World.ZoneId;
+        var exit = pack.Zones.TryGet((int)startZone, out var here) && here.Exits.Count > 0 ? here.Exits[0] : null;
+        if (exit is null)
+        {
+            Console.WriteLine("M2 GATE: FAIL (the start zone has no exit)");
+            return 1;
+        }
+        var destination = pack.Zones[exit.ToZoneKey].Id;
+        var reflexId = GameSession.FindProtocol("reflex_boost_1")!.Id;
+        var arrived = await Until(
+            () =>
+            {
+                opSteer = op.World.InWorld && op.World.ZoneId == startZone ? Movement.DirectionTowards(op.World.Self.Position, exit.Area.Center) : ((short)0, (short)0);
+                return op.World.InWorld && op.World.ZoneId == destination;
+            },
+            $"operative walks onto the pad and arrives in {pack.Zones[exit.ToZoneKey].Name}");
+        opSteer = (0, 0);
+        if (!arrived)
+        {
+            return 1;
+        }
+        if (!await Until(() => KestrelWornActive() == true && op.World.Protocols!.Running.Any(r => r.ProtocolId == reflexId) && op.Connected,
+            "Kestrel still worn and active, Medic's buff still running, same connection"))
+        {
+            return 1;
+        }
+
         op.Say("/cancel reflex_boost_1");
         if (!await Until(() => KestrelWornActive() == false, "Kestrel inactive once the Medic's buff is gone"))
         {
@@ -138,7 +170,7 @@ public static class TwinkGate
         {
             Console.WriteLine($"  {s}");
         }
-        Console.WriteLine("M2 GATE: PASS (twinked a rifle with another player's buff)");
+        Console.WriteLine("M2 GATE: PASS (twinked a rifle with another player's buff, and carried it into another zone)");
         return 0;
     }
 }

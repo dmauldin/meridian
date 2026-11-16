@@ -30,6 +30,9 @@ Console.WriteLine($"logging in {count} bots via {authUrl}");
 var logins = await Task.WhenAll(Enumerable.Range(0, count).Select(i =>
     auth.QuickPlayAsync(new Credentials($"bot{i:D4}", password), $"Bot{i:D4}", "operative", "baseline")));
 
+// Load the content pack (exit pads) before the clock starts: all bots share one thread, and a
+// cold load inside the first Welcome would stall every bot's join and inflate the RTT tail.
+_ = Meridian.Content.ContentPacks.Embedded;
 var bots = logins.Select((login, i) => new Bot(i, login, login.GatewayHost, login.GatewayPort, hunt)).ToList();
 var stopwatch = Stopwatch.StartNew();
 var end = Stopwatch.GetTimestamp() + (durationSeconds * Stopwatch.Frequency);
@@ -70,12 +73,13 @@ Console.WriteLine($"  chat lines heard      {bots.Sum(b => b.ChatsHeard)}");
 Console.WriteLine($"  combat                hits={bots.Sum(b => b.Hits)} kills={bots.Sum(b => b.Kills)} deaths={bots.Sum(b => b.Deaths)}");
 Console.WriteLine($"  progression           xp={bots.Sum(b => b.Xp)} max_level={bots.Max(b => b.Level)}");
 Console.WriteLine($"  bytes received        {bots.Sum(b => b.Connection.BytesReceived) / 1024} KiB");
+Console.WriteLine($"  zone changes          {bots.Sum(b => b.ZoneChanges)} (load bots avoid exits; expect 0)");
 foreach (var g in failures)
 {
     Console.WriteLine($"  disconnected: {g.Count()} x {g.Key}");
 }
 
-var pass = connected == count && Pct(rates, 0) >= minSnapshotHz;
+var pass = connected == count && Pct(rates, 0) >= minSnapshotHz && bots.Sum(b => b.ZoneChanges) == 0;
 Console.WriteLine(pass ? "PASS" : "FAIL");
 
 foreach (var b in bots)

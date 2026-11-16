@@ -202,7 +202,7 @@ public class TicketTests
     private static readonly byte[] ServerKey = RandomNumberGenerator.GetBytes(32);
 
     private static LoginTicket Sample() =>
-        new(42, 7, "Ýrsa", RandomNumberGenerator.GetBytes(32), DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(), CharacterId: 0xFEED_0000_0000_0042);
+        new(42, 7, "Ýrsa", RandomNumberGenerator.GetBytes(32), DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(), CharacterId: 0xFEED_0000_0000_0042, ZoneId: 0xC0FFEE);
 
     [Fact]
     public void Round_trips()
@@ -216,7 +216,7 @@ public class TicketTests
         Assert.Equal(t.CharacterName, opened.CharacterName);
         Assert.Equal(t.SessionKey, opened.SessionKey);
         Assert.Equal(t.ExpiresAt, opened.ExpiresAt);
-        Assert.Equal(0xFEED_0000_0000_0042UL, opened.CharacterId);
+        Assert.Equal((0xFEED_0000_0000_0042UL, 0xC0FFEEu), (opened.CharacterId, opened.ZoneId));
     }
 
     [Fact]
