@@ -30,6 +30,9 @@ Console.WriteLine($"logging in {count} bots via {authUrl}");
 var logins = await Task.WhenAll(Enumerable.Range(0, count).Select(i =>
     auth.QuickPlayAsync(new Credentials($"bot{i:D4}", password), $"Bot{i:D4}", "operative", "baseline")));
 
+// Load the content pack (exit pads) before the clock starts: all bots share one thread, and a
+// cold load inside the first Welcome would stall every bot's join and inflate the RTT tail.
+_ = Meridian.Content.ContentPacks.Embedded;
 var bots = logins.Select((login, i) => new Bot(i, login, login.GatewayHost, login.GatewayPort, hunt)).ToList();
 var stopwatch = Stopwatch.StartNew();
 var end = Stopwatch.GetTimestamp() + (durationSeconds * Stopwatch.Frequency);
