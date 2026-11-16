@@ -251,6 +251,12 @@ requirements checked against your current stats, Protocol buttons, buff countdow
 unit tested; the Godot classes only lay them out. Every button calls the same `GameSession`
 method as its chat command, and the server decides: windows refresh when its answer arrives.
 
+The UI is laid out for 1600x900 and scales with the window (Godot's canvas_items stretch; 3D
+renders at full resolution). At startup the window opens at 1600x900 times the monitor's scale
+(DPI / 96 on Windows), capped to the screen, so a hi-DPI display gets the same apparent size.
+`-- --ui-scale 1.25` or `MERIDIAN_UI_SCALE=1.25` makes the UI bigger or smaller (0.5-3);
+an explicit `--resolution` is left alone.
+
 The autopilot's `--show-ui` opens the windows, casts a Protocol and presses a real train button;
 the M1 gate runs one client that way and requires the server to confirm the point was spent.
 With a display (or `xvfb-run`) and `--screenshot`, it also saves a frame of the UI.
