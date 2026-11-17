@@ -421,7 +421,7 @@ public sealed class PlayerSessionTests : IDisposable
         {
             _sim.Step();
         }
-        var exit = Meridian.Content.ContentPacks.Embedded.Zones["glasswind_flats"].Exits.Single();
+        var exit = Meridian.Content.ContentPacks.Embedded.Zones["glasswind_flats"].Exits.Single(e => e.ToZoneKey == "rustfall_basin");
         _sim.FindCharacter(rook.Id)!.Position = exit.Area.Center;
         _sim.Step();
 

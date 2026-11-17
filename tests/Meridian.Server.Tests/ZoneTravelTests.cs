@@ -13,7 +13,7 @@ public class ZoneTravelTests
 {
     private static readonly ClientRef A = new(1, 1);
     private static readonly ContentPack Pack = ContentPacks.Embedded;
-    private static readonly ZoneExit ToRustfall = Pack.Zones["glasswind_flats"].Exits.Single();
+    private static readonly ZoneExit ToRustfall = Pack.Zones["glasswind_flats"].Exits.Single(e => e.ToZoneKey == "rustfall_basin");
 
     private static (ZoneSimulation Sim, RecordingOutbox Out) Glasswind()
     {

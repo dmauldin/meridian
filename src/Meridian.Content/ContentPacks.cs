@@ -69,6 +69,7 @@ public static class ContentPacks
     {
         ArgumentNullException.ThrowIfNull(dto);
         ArgumentNullException.ThrowIfNull(dto.NewCharacter);
+        ArgumentNullException.ThrowIfNull(dto.Economy);
         return new ContentPack(
             dto.Items.Select(ToModel),
             dto.Lines.Select(l => new ProtocolLineDef(l.Id, l.Key, l.Name)),
@@ -78,7 +79,8 @@ public static class ContentPacks
             dto.Professions.Select(ToModel),
             dto.Origins.Select(ToModel),
             ToModel(dto.Progression),
-            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character"), dto.NewCharacter.Unarmed, dto.NewCharacter.InventorySlots, dto.NewCharacter.StartZone),
+            new NewCharacterDef(Stats(dto.NewCharacter.Stats, "new_character"), dto.NewCharacter.Unarmed, dto.NewCharacter.InventorySlots, dto.NewCharacter.StartZone, dto.NewCharacter.Credits),
+            new EconomyDef(dto.Economy.SellBackBp, dto.Economy.ShopRangeMm),
             hash);
     }
 
@@ -96,7 +98,8 @@ public static class ContentPacks
             pack.Professions.All.Select(ToDto).ToList(),
             pack.Origins.All.Select(ToDto).ToList(),
             ToDto(pack.Progression),
-            new NewCharacterDto(Sorted(pack.NewCharacter.Stats), pack.NewCharacter.UnarmedKey, pack.NewCharacter.InventorySlots, pack.NewCharacter.StartZoneKey));
+            new NewCharacterDto(Sorted(pack.NewCharacter.Stats), pack.NewCharacter.UnarmedKey, pack.NewCharacter.InventorySlots, pack.NewCharacter.StartZoneKey, pack.NewCharacter.Credits),
+            new EconomyDto(pack.Economy.SellBackBp, pack.Economy.ShopRangeMm));
     }
 
     // ------------------------------------------------------------------ DTO -> model
@@ -116,7 +119,8 @@ public static class ContentPacks
                 ? new WeaponTemplate(Parse<Stat>(w.AttackSkill, where), Parse<Stat>(w.Initiative, where), Parse<Stat>(w.Defence, where),
                     Parse<DamageType>(w.DamageType, where), w.AttackTimeMs, w.RangeMm, Curve(w.MinDamage, where), Curve(w.MaxDamage, where))
                 : null,
-            d.Protocol);
+            d.Protocol,
+            d.Value is { } value ? Curve(value, where) : null);
     }
 
     /// <summary>Validates and converts one Protocol.</summary>
@@ -146,7 +150,8 @@ public static class ContentPacks
             new WeaponProfile(a.Name, Parse<Stat>(a.AttackSkill, where), Parse<Stat>(a.Initiative, where), Parse<Stat>(a.Defence, where),
                 Parse<DamageType>(a.DamageType, where), a.MinDamage, a.MaxDamage, a.AttackTimeMs, a.RangeMm),
             d.AggroRadiusMm, d.LeashMm, d.SpeedMmPerSecond, d.RespawnMs, d.Xp,
-            (d.Loot ?? []).Select(l => new LootDef(l.Item, l.ChanceBp, l.QlSpread)).ToList());
+            (d.Loot ?? []).Select(l => new LootDef(l.Item, l.ChanceBp, l.QlSpread)).ToList(),
+            d.Credits is { } c ? new CreditDrop(c.Min, c.Max) : null);
     }
 
     /// <summary>Validates and converts one profession.</summary>
@@ -190,7 +195,8 @@ public static class ContentPacks
         d.Id, d.Key, d.Name,
         new ZoneBounds(d.Bounds.MinX, d.Bounds.MinZ, d.Bounds.MaxX, d.Bounds.MaxZ),
         d.Spawns.Select(s => new SpawnGroup(s.MobKey, s.Count, new Position(s.CenterX, s.CenterZ), s.InnerRadiusMm, s.OuterRadiusMm)).ToList(),
-        (d.Exits ?? []).Select(e => new ZoneExit(e.ToZone, new ZoneBounds(e.Area.MinX, e.Area.MinZ, e.Area.MaxX, e.Area.MaxZ), new Position(e.ArriveX, e.ArriveZ))).ToList());
+        (d.Exits ?? []).Select(e => new ZoneExit(e.ToZone, new ZoneBounds(e.Area.MinX, e.Area.MinZ, e.Area.MaxX, e.Area.MaxZ), new Position(e.ArriveX, e.ArriveZ))).ToList(),
+        (d.Shops ?? []).Select(s => new ShopDef(s.Id, s.Key, s.Name, new Position(s.X, s.Z), s.Stock.Select(i => new ShopStock(i.Item, i.Ql)).ToList())).ToList());
 
     // ------------------------------------------------------------------ model -> DTO
 
@@ -203,7 +209,8 @@ public static class ContentPacks
             ? new WeaponDto(w.AttackSkill.ToString(), w.InitiativeSkill.ToString(), w.DefenceSkill.ToString(), w.DamageType.ToString(),
                 w.AttackTimeMs, w.RangeMm, Anchors(w.MinDamage), Anchors(w.MaxDamage))
             : null,
-        t.ProtocolKey);
+        t.ProtocolKey,
+        t.Value is { } value ? Anchors(value) : null);
 
     private static ProtocolDto ToDto(ProtocolTemplate p) => new(
         p.Id, p.Key, p.Name, p.LineId, p.Strength, p.LatticeCost, p.EnergyCost, p.DurationMs, p.Target.ToString(),
@@ -220,7 +227,8 @@ public static class ContentPacks
             new AttackDto(a.Name, a.AttackSkill.ToString(), a.InitiativeSkill.ToString(), a.DefenceSkill.ToString(), a.DamageType.ToString(),
                 a.BaseAttackTimeMs, a.RangeMm, a.MinDamage, a.MaxDamage),
             m.AggroRadiusMm, m.LeashMm, m.SpeedMmPerSecond, m.RespawnMs, m.Xp,
-            m.Loot.Select(l => new LootDto(l.ItemKey, l.ChanceBp, l.QlSpread)).ToList());
+            m.Loot.Select(l => new LootDto(l.ItemKey, l.ChanceBp, l.QlSpread)).ToList(),
+            m.Credits is { } c ? new CreditsDto(c.Min, c.Max) : null);
     }
 
     private static ProfessionDto ToDto(ProfessionDef p) => new(
@@ -241,7 +249,8 @@ public static class ContentPacks
         z.Id, z.Key, z.Name,
         new BoundsDto(z.Bounds.MinX, z.Bounds.MinZ, z.Bounds.MaxX, z.Bounds.MaxZ),
         z.Spawns.Select(s => new SpawnDto(s.MobKey, s.Count, s.Center.X, s.Center.Z, s.InnerRadiusMm, s.OuterRadiusMm)).ToList(),
-        z.Exits.Select(e => new ExitDto(e.ToZoneKey, new BoundsDto(e.Area.MinX, e.Area.MinZ, e.Area.MaxX, e.Area.MaxZ), e.Arrive.X, e.Arrive.Z)).ToList());
+        z.Exits.Select(e => new ExitDto(e.ToZoneKey, new BoundsDto(e.Area.MinX, e.Area.MinZ, e.Area.MaxX, e.Area.MaxZ), e.Arrive.X, e.Arrive.Z)).ToList(),
+        z.Shops.Count == 0 ? null : z.Shops.Select(s => new ShopDto(s.Id, s.Key, s.Name, s.At.X, s.At.Z, s.Stock.Select(i => new StockDto(i.ItemKey, i.Ql)).ToList())).ToList());
 
     // ------------------------------------------------------------------ helpers
 

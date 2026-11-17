@@ -26,6 +26,7 @@
   speed_m_s: 4
   respawn_s: 10
   xp: 120
+  credits: [3, 12]   # to the looter, uniform
   # Each entry rolls on its own; chance in basis points; QL = level +/- ql_spread.
   loot:
     - { item: armor.marksman_gloves, chance: 1500, ql_spread: 2 }
@@ -62,6 +63,7 @@
   speed_m_s: 3.5
   respawn_s: 15
   xp: 260
+  credits: [8, 24]
   loot:
     - { item: armor.marksman_gloves, chance: 2000, ql_spread: 3 }
     - { item: rifle.kestrel_mk2, chance: 1000, ql_spread: 3 }
