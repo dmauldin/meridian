@@ -478,6 +478,15 @@ public sealed class GatewayHost : IInternalHandler<NetPeer>, IDisposable
         public void OnCancelProtocol(int context, in CancelProtocol message)
         {
         }
+
+        // Shop ids and indices are bounded by their fields; the zone checks they exist and are in range.
+        public void OnBuyItem(int context, in BuyItem message)
+        {
+        }
+
+        public void OnSellItem(int context, in SellItem message)
+        {
+        }
     }
 }
 

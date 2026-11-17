@@ -100,6 +100,9 @@ public sealed class Player : Entity
     /// <summary>Credits held, 0..<see cref="Meridian.Core.Content.EconomyDef.MaxCredits"/>. Saved with the character.</summary>
     public long Credits { get; internal set; }
 
+    /// <summary>The balance last sent in <c>InventoryState</c>.</summary>
+    internal long LastSentCredits { get; set; } = -1;
+
     /// <summary>Known Protocols, energy, and the Protocols running on this player.</summary>
     public Lattice Lattice { get; }
 

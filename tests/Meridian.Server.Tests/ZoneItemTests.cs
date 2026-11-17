@@ -213,4 +213,30 @@ public class ZoneItemTests
         Assert.InRange(found.Item.Ql, mob.Template.Level - 2, mob.Template.Level + 2);
         Assert.Contains(outbox.Of<Notice>(A), n => n.Text!.StartsWith("You found Marksman Gloves", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Credits_drop_to_the_looter_and_are_sent()
+    {
+        var dto = ContentPacks.ToDto(Pack);
+        var skitter = dto.Mobs.Single(m => m.Key == "mob.glasswind_skitter");
+        dto.Mobs[dto.Mobs.IndexOf(skitter)] = skitter with { Loot = [], Credits = new CreditsDto(9, 9) };
+        var content = ContentPacks.ToModel(dto, 1);
+
+        var (sim, outbox) = Zone(content: content, mobs: 1);
+        var mob = sim.Mobs[0];
+        var p = sim.Join(A, 1, "hunter");
+        var before = p.Credits;
+        p.Position = mob.Spawn with { X = mob.Spawn.X + 15_000 };
+        Send(sim, new SetTarget { EntityId = mob.EntityId });
+        Send(sim, new SetAttack { Enabled = true });
+        for (var i = 0; i < 2_000 && !mob.Dead; i++)
+        {
+            sim.Step();
+        }
+        sim.Step();
+        Assert.True(mob.Dead);
+        Assert.Equal(before + 9, p.Credits);
+        Assert.Equal(before + 9, outbox.Last<InventoryState>(A).Credits);
+        Assert.Contains(outbox.Of<Notice>(A), n => n.Text == "You found 9 credits.");
+    }
 }

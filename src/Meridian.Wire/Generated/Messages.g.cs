@@ -9,7 +9,7 @@ namespace Meridian.Wire;
 /// <summary>Identity of the schema this code was generated from. Client and server must match.</summary>
 public static class WireSchema
 {
-    public const ulong Hash = 0x4548FFFBBC41123EUL;
+    public const ulong Hash = 0x82B4FDA629F2931AUL;
 }
 
 public partial struct ConnectRequest : IWireMessage<ConnectRequest>
@@ -382,6 +382,64 @@ public partial struct CancelProtocol : IWireMessage<CancelProtocol>
     {
         var value = default(CancelProtocol);
         value.ProtocolId = reader.ReadU32();
+        return value;
+    }
+}
+
+public partial struct BuyItem : IWireMessage<BuyItem>
+{
+    public const ushort Id = 113;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<BuyItem>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<BuyItem>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ShopId;
+
+    public byte StockIndex;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ShopId);
+        writer.WriteU8(StockIndex);
+    }
+
+    public static BuyItem Read(ref WireReader reader)
+    {
+        var value = default(BuyItem);
+        value.ShopId = reader.ReadU32();
+        value.StockIndex = reader.ReadU8();
+        return value;
+    }
+}
+
+public partial struct SellItem : IWireMessage<SellItem>
+{
+    public const ushort Id = 114;
+
+    public static ushort MessageId => Id;
+
+    static Direction IWireMessage<SellItem>.Direction => Direction.ServerBound;
+
+    static Delivery IWireMessage<SellItem>.Delivery => Delivery.ReliableOrdered;
+
+    public uint ShopId;
+
+    public byte Position;
+
+    public readonly void Write(ref WireWriter writer)
+    {
+        writer.WriteU32(ShopId);
+        writer.WriteU8(Position);
+    }
+
+    public static SellItem Read(ref WireReader reader)
+    {
+        var value = default(SellItem);
+        value.ShopId = reader.ReadU32();
+        value.Position = reader.ReadU8();
         return value;
     }
 }
@@ -953,6 +1011,8 @@ public partial struct InventoryState : IWireMessage<InventoryState>
 
     public WornItem[]? Worn;
 
+    public long Credits;
+
     public readonly void Write(ref WireWriter writer)
     {
         writer.WriteU8(Size);
@@ -968,6 +1028,7 @@ public partial struct InventoryState : IWireMessage<InventoryState>
         {
             item.Write(ref writer);
         }
+        writer.WriteI64(Credits);
     }
 
     public static InventoryState Read(ref WireReader reader)
@@ -986,6 +1047,7 @@ public partial struct InventoryState : IWireMessage<InventoryState>
         {
             value.Worn[i] = WornItem.Read(ref reader);
         }
+        value.Credits = reader.ReadI64();
         return value;
     }
 }
@@ -1390,6 +1452,10 @@ public interface IServerBoundHandler<in TContext>
     void OnCastProtocol(TContext context, in CastProtocol message);
 
     void OnCancelProtocol(TContext context, in CancelProtocol message);
+
+    void OnBuyItem(TContext context, in BuyItem message);
+
+    void OnSellItem(TContext context, in SellItem message);
 }
 
 /// <summary>Receives ClientBound messages from <see cref="WireDispatch"/>.</summary>
@@ -1549,6 +1615,20 @@ public static class WireDispatch
                 var message = CancelProtocol.Read(ref reader);
                 reader.EnsureEnd();
                 handler.OnCancelProtocol(context, message);
+                return id;
+            }
+            case BuyItem.Id:
+            {
+                var message = BuyItem.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnBuyItem(context, message);
+                return id;
+            }
+            case SellItem.Id:
+            {
+                var message = SellItem.Read(ref reader);
+                reader.EnsureEnd();
+                handler.OnSellItem(context, message);
                 return id;
             }
             default:
