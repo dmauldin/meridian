@@ -1,0 +1,7 @@
+# Credits rules that are not about one item. Item prices are each item's `value` curve.
+
+# What a shop pays for an item, in basis points of its value. The design doc: shop items sell
+# back for 10% or less, so credits mostly come from play, not from flipping shop stock.
+sell_back_bp: 1000
+# How close a player must stand to a shop terminal to trade with it.
+shop_range_m: 5

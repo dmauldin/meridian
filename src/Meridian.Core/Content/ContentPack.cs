@@ -20,6 +20,7 @@ public sealed class ContentPack
         IEnumerable<OriginDef> origins,
         ProgressionDef progression,
         NewCharacterDef newCharacter,
+        EconomyDef economy,
         ulong hash)
     {
         Items = Index(items, i => i.Id, i => i.Key, "item");
@@ -31,6 +32,9 @@ public sealed class ContentPack
         Origins = Index(origins, o => (int)o.Id, o => o.Key, "origin");
         Progression = progression;
         NewCharacter = newCharacter;
+        Economy = economy;
+        Shops = Index(Zones.All.SelectMany(z => z.Shops), s => s.Id, s => s.Key, "shop");
+        _shopZones = Zones.All.SelectMany(z => z.Shops.Select(s => (s.Id, z.Id))).ToFrozenDictionary(p => p.Item1, p => p.Item2);
         Hash = hash;
         Validate();
     }
@@ -54,6 +58,16 @@ public sealed class ContentPack
     public ProgressionDef Progression { get; }
 
     public NewCharacterDef NewCharacter { get; }
+
+    public EconomyDef Economy { get; }
+
+    /// <summary>Every zone's shops, by their pack-wide id.</summary>
+    public Catalog<ShopDef> Shops { get; }
+
+    /// <summary>The zone a shop stands in.</summary>
+    public uint ZoneOfShop(int shopId) => _shopZones[shopId];
+
+    private readonly FrozenDictionary<int, uint> _shopZones;
 
     /// <summary>The weapon used when nothing active is in hand (validated when the pack loads).</summary>
     public WeaponProfile UnarmedWeapon => Items[NewCharacter.UnarmedKey].WeaponAt(1)!;
@@ -112,8 +126,41 @@ public sealed class ContentPack
         {
             throw new InvalidDataException("new_character: inventory_slots must be 1..120.");
         }
+        if (NewCharacter.Credits is < 0 or > EconomyDef.MaxCredits)
+        {
+            throw new InvalidDataException($"new_character: credits must be 0..{EconomyDef.MaxCredits}.");
+        }
+        if (Economy.SellBackBp is < 0 or > 10_000 || Economy.ShopRangeMm is < 1_000 or > 50_000)
+        {
+            throw new InvalidDataException("economy: sell_back_bp must be 0..10000 and shop_range_m 1..50.");
+        }
+        foreach (var zone in Zones.All)
+        {
+            foreach (var shop in zone.Shops)
+            {
+                if (!zone.Bounds.Contains(shop.At) || zone.Exits.Any(e => e.Area.Contains(shop.At)))
+                {
+                    throw new InvalidDataException($"zone '{zone.Key}': shop '{shop.Key}' must stand inside the zone and off its exits.");
+                }
+                if (shop.Stock.Count is 0 or > 64)
+                {
+                    throw new InvalidDataException($"shop '{shop.Key}': stock must list 1..64 items.");
+                }
+                foreach (var s in shop.Stock)
+                {
+                    if (!Items.TryGet(s.ItemKey, out var t) || t.Value is null || s.Ql != t.ClampQl(s.Ql))
+                    {
+                        throw new InvalidDataException($"shop '{shop.Key}': '{s.ItemKey}' QL {s.Ql} is unknown, has no value or is outside its QL range.");
+                    }
+                }
+            }
+        }
         foreach (var m in Mobs.All)
         {
+            if (m.Credits is { } c && (c.Min < 0 || c.Max < c.Min || c.Max > 1_000_000))
+            {
+                throw new InvalidDataException($"mob '{m.Key}': credits need 0 <= min <= max <= 1000000.");
+            }
             foreach (var l in m.Loot)
             {
                 if (!Items.ContainsKey(l.ItemKey))
@@ -128,6 +175,10 @@ public sealed class ContentPack
         }
         foreach (var item in Items.All)
         {
+            if (item.Value is { } value && Enumerable.Range(item.MinQl, item.MaxQl - item.MinQl + 1).Any(ql => value.At(ql) < 1))
+            {
+                throw new InvalidDataException($"item '{item.Key}': value must be at least 1 credit at every QL.");
+            }
             if (item.IsProtocol != (item.Slot == EquipSlot.None))
             {
                 throw new InvalidDataException($"item '{item.Key}': an item has a slot or a protocol, never both or neither.");

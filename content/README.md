@@ -28,7 +28,8 @@ Rules:
   `starting_weapon` is the kit weapon.
 - `origins.yaml`: starting attributes, attribute cost tiers and `bonus_points_per_level`.
   Attributes are priced only by origin, never by profession.
-- `mobs`: `xp` is what each player on the mob's threat list earns when it dies. `loot` lists
+- `mobs`: `xp` is what each player on the mob's threat list earns when it dies. `credits:
+  [min, max]` is dropped to the looter. `loot` lists
   possible drops, each rolled on its own: `item` (key), `chance` (basis points, 1..10000) and
   `ql_spread` (QL = mob level plus or minus this, clamped to the item's range).
 - `protocols/buffs.yaml`: `range_m` is how far the target may be from the caster (1-100);
@@ -39,5 +40,20 @@ Rules:
 - `zones`: `bounds_m` is the playable area; `spawns` place mobs. `exits` lead to other zones:
   `to` (zone key), `area_m` (the pad, inside this zone) and `arrive_m` (where the player
   appears, inside the destination and outside its exits, so nobody arrives on a pad).
+- `zones` `shops`: shop terminals. `id` is pack-wide and append-only (the wire names shops by
+  it); `at_m` must be inside the zone and off its exits; `stock` lists `{ item, ql }` entries,
+  each an item with a `value` at a QL in its range. Shops sell stock at its value.
+
+## Economy
+
+- Items: `value` is the credits a shop charges, as a QL curve. An item without one (fists)
+  cannot be bought or sold.
+- `economy.yaml`: `sell_back_bp` is what a shop pays for any item with a value, in basis
+  points of that value, rounded down (the design doc: 10% or less); `shop_range_m` is how close
+  a player must stand to a shop terminal to trade.
+- `new_character.yaml`: `credits` is what a new character starts with.
+
+## Starting out
+
 - `new_character.yaml`: `start_zone` is where new characters appear; `unarmed` is the weapon item used when no active weapon is worn;
   `inventory_slots` is how many items a character carries besides what it wears.

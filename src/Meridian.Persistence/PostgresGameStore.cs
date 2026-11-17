@@ -18,7 +18,7 @@ namespace Meridian.Persistence;
 public sealed class PostgresGameStore : IGameStore, IDisposable
 {
     /// <summary>The newest migration this build knows. Opening refuses an older database.</summary>
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
 
     private readonly NpgsqlDataSource _db;
 
@@ -215,8 +215,8 @@ public sealed class PostgresGameStore : IGameStore, IDisposable
         // Another account can still take the name between the check and here: the unique index decides.
         await using var insert = new NpgsqlCommand(
             """
-            INSERT INTO characters (account_id, name, profession, origin, level, xp, unspent_points, skills, zone, pos_x, pos_y, pos_z, health)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13)
+            INSERT INTO characters (account_id, name, profession, origin, level, xp, unspent_points, skills, zone, pos_x, pos_y, pos_z, health, credits)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14)
             ON CONFLICT DO NOTHING RETURNING id
             """, connection);
         insert.Parameters.Add(new() { Value = (long)draft.AccountId });
@@ -227,6 +227,7 @@ public sealed class PostgresGameStore : IGameStore, IDisposable
         insert.Parameters.Add(new() { Value = draft.Xp });
         insert.Parameters.Add(new() { Value = draft.UnspentPoints });
         AddSkillsAndPlacement(insert, draft);
+        insert.Parameters.Add(new() { Value = draft.Credits });
         if (await insert.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not long id)
         {
             return (null, CreateCharacterError.NameTaken);
@@ -257,7 +258,7 @@ public sealed class PostgresGameStore : IGameStore, IDisposable
             """
             UPDATE characters
                SET level = $1, xp = $2, unspent_points = $3, skills = $4::jsonb,
-                   zone = $5, pos_x = $6, pos_y = $7, pos_z = $8, health = $9,
+                   zone = $5, pos_x = $6, pos_y = $7, pos_z = $8, health = $9, credits = $12,
                    version = version + 1, saved_at = now()
              WHERE id = $10 AND version = $11
             RETURNING version
@@ -268,6 +269,7 @@ public sealed class PostgresGameStore : IGameStore, IDisposable
         AddSkillsAndPlacement(update, r);
         update.Parameters.Add(new() { Value = (long)r.Id });
         update.Parameters.Add(new() { Value = r.Version });
+        update.Parameters.Add(new() { Value = r.Credits });
         if (await update.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not long version)
         {
             await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
@@ -341,7 +343,7 @@ public sealed class PostgresGameStore : IGameStore, IDisposable
         await using var batch = new NpgsqlBatch(connection);
         var match = $"SELECT id FROM characters WHERE {where}";
         foreach (var sql in (string[])[
-            $"SELECT id, account_id, name, profession, origin, level, xp, unspent_points, skills::text, zone, pos_x, pos_z, health, version FROM characters WHERE {where} ORDER BY id",
+            $"SELECT id, account_id, name, profession, origin, level, xp, unspent_points, skills::text, zone, pos_x, pos_z, health, version, credits FROM characters WHERE {where} ORDER BY id",
             $"SELECT character_id, location, position, template_id, ql FROM character_items WHERE character_id IN ({match}) ORDER BY character_id, location, position",
             $"SELECT character_id, protocol_id FROM character_protocols WHERE character_id IN ({match}) ORDER BY character_id, protocol_id",
             $"SELECT character_id, protocol_id, remaining_ms FROM character_buffs WHERE character_id IN ({match}) ORDER BY character_id, protocol_id"])
@@ -362,7 +364,7 @@ public sealed class PostgresGameStore : IGameStore, IDisposable
                 (ulong)reader.GetInt64(0), (ulong)reader.GetInt64(1), reader.GetString(2),
                 (Profession)reader.GetInt16(3), (Origin)reader.GetInt16(4),
                 reader.GetInt32(5), reader.GetInt64(6), reader.GetInt32(7),
-                ParseSkills(reader.GetString(8)), placement, reader.GetInt64(13), [], [], []));
+                ParseSkills(reader.GetString(8)), placement, reader.GetInt64(13), [], [], [], reader.GetInt64(14)));
         }
         var items = new Dictionary<long, List<StoredItem>>();
         await reader.NextResultAsync(cancellationToken).ConfigureAwait(false);

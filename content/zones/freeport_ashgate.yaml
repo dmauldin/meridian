@@ -1,0 +1,35 @@
+# The neutral free settlers' city: no mobs, shops for credits. The pad east leads back to
+# Glasswind Flats.
+id: 3
+key: freeport_ashgate
+name: Freeport Ashgate
+bounds_m: { min_x: -150, min_z: -150, max_x: 150, max_z: 150 }
+exits:
+  - to: glasswind_flats
+    area_m: { min_x: 58, min_z: -4, max_x: 66, max_z: 4 }
+    arrive_m: { x: -50, z: 0 }
+# Shop ids are pack-wide and append-only (the wire names a shop by id). Stock sells at the
+# item's value; any item with a value sells back at economy.yaml's rate.
+shops:
+  - id: 1
+    key: shop.ashgate_outfitter
+    name: Ashgate Outfitter
+    at_m: { x: 20, z: 12 }
+    stock:
+      - { item: rifle.combine_carbine, ql: 4 }
+      - { item: rifle.combine_carbine, ql: 8 }
+      - { item: rifle.combine_carbine, ql: 12 }
+      - { item: pistol.combine_sidearm, ql: 4 }
+      - { item: pistol.combine_sidearm, ql: 8 }
+      - { item: blunt.shock_maul, ql: 4 }
+      - { item: blunt.shock_maul, ql: 8 }
+      - { item: armor.marksman_gloves, ql: 4 }
+      - { item: armor.marksman_gloves, ql: 8 }
+      - { item: implant.ocular_reflex, ql: 6 }
+  - id: 2
+    key: shop.lattice_exchange
+    name: Lattice Exchange
+    at_m: { x: 20, z: -12 }
+    stock:
+      - { item: protocol.rifle_enhancement_1, ql: 1 }
+      - { item: protocol.reflex_boost_1, ql: 1 }

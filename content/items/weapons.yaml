@@ -21,6 +21,7 @@
   name: Combine Issue Carbine
   slot: TwoHand
   ql: [1, 300]
+  value: { 1: 25, 300: 25000 }   # credits at QL
   requirements:
     Rifle: { 1: 4, 300: 1150 }
   weapon:
@@ -38,6 +39,7 @@
   name: Kestrel Mk2
   slot: TwoHand
   ql: [1, 300]
+  value: { 1: 40, 300: 40000 }   # credits at QL
   professions: [Operative, Trooper]
   requirements:
     Rifle: { 1: 40, 300: 1300 }
@@ -57,6 +59,7 @@
   name: Shock Maul
   slot: TwoHand
   ql: [1, 300]
+  value: { 1: 25, 300: 25000 }   # credits at QL
   requirements:
     Blunt: { 1: 4, 300: 1150 }
     Strength: { 1: 10, 300: 500 }
@@ -75,6 +78,7 @@
   name: Combine Sidearm
   slot: MainHand
   ql: [1, 300]
+  value: { 1: 20, 300: 20000 }   # credits at QL
   requirements:
     Pistol: { 1: 4, 300: 1150 }
   weapon:

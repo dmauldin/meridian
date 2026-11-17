@@ -166,6 +166,10 @@ public class HostileInputTests
         public void OnCastProtocol(int context, in CastProtocol message) => Calls.Add($"cast {message.ProtocolId} on {message.TargetId}");
 
         public void OnCancelProtocol(int context, in CancelProtocol message) => Calls.Add($"cancel {message.ProtocolId}");
+
+        public void OnBuyItem(int context, in BuyItem message) => Calls.Add($"buy {message.ShopId} {message.StockIndex}");
+
+        public void OnSellItem(int context, in SellItem message) => Calls.Add($"sell {message.ShopId} {message.Position}");
     }
 
     [Fact]

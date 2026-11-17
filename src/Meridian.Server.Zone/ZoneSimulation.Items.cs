@@ -71,23 +71,25 @@ public sealed partial class ZoneSimulation
 
     private void SendInventoryIfChanged(Player p)
     {
-        if (p.LastSentOutfitRevision == p.Outfit.Revision)
+        if (p.LastSentOutfitRevision == p.Outfit.Revision && p.LastSentCredits == p.Credits)
         {
             return;
         }
         p.LastSentOutfitRevision = p.Outfit.Revision;
+        p.LastSentCredits = p.Credits;
         Send(p, new InventoryState
         {
             Size = (byte)p.Outfit.InventorySize,
             Carried = [.. p.Outfit.Inventory.Select(i => new CarriedItem { Position = (byte)i.Position, TemplateId = (uint)i.Item.TemplateId, Ql = (ushort)i.Item.Ql })],
             Worn = [.. p.Outfit.Worn.Select(w => new WornItem { Slot = (byte)w.Slot, TemplateId = (uint)w.Item.TemplateId, Ql = (ushort)w.Item.Ql, Active = w.Active })],
+            Credits = p.Credits,
         });
     }
 
     /// <summary>
     /// Rolls each of the mob's loot entries and gives what drops to whoever built the most threat
     /// (ties go to the lowest entity id, so it is deterministic). QL is the mob's level plus or
-    /// minus the entry's spread.
+    /// minus the entry's spread. Then its credits, to the same player.
     /// </summary>
     private void DropLoot(Mob mob)
     {
@@ -116,6 +118,7 @@ public sealed partial class ZoneSimulation
                 ? $"You found {Describe(item)}."
                 : $"Your inventory is full: {Describe(item)} was lost.");
         }
+        DropCredits(mob, winner);
     }
 
     /// <summary>Slash commands the server handles. Unknown ones get a notice, never a broadcast.</summary>

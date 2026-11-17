@@ -92,6 +92,10 @@ public sealed class GameSession : IDisposable
 
     public void Discard(int position) => Connection.Send(new DiscardItem { Position = (byte)position });
 
+    public void Buy(int shopId, int stockIndex) => Connection.Send(new BuyItem { ShopId = (uint)shopId, StockIndex = (byte)stockIndex });
+
+    public void Sell(int shopId, int position) => Connection.Send(new SellItem { ShopId = (uint)shopId, Position = (byte)position });
+
     public void Upload(int position) => Connection.Send(new UploadProtocol { Position = (byte)position });
 
     public void CancelProtocol(int protocolId) => Connection.Send(new CancelProtocol { ProtocolId = (uint)protocolId });

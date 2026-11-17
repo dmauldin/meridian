@@ -83,7 +83,17 @@
             "value": 520
           }
         ]
-      }
+      },
+      "value": [
+        {
+          "ql": 1,
+          "value": 25
+        },
+        {
+          "ql": 300,
+          "value": 25000
+        }
+      ]
     },
     {
       "id": 1002,
@@ -152,7 +162,17 @@
             "value": 700
           }
         ]
-      }
+      },
+      "value": [
+        {
+          "ql": 1,
+          "value": 40
+        },
+        {
+          "ql": 300,
+          "value": 40000
+        }
+      ]
     },
     {
       "id": 1003,
@@ -218,7 +238,17 @@
             "value": 640
           }
         ]
-      }
+      },
+      "value": [
+        {
+          "ql": 1,
+          "value": 25
+        },
+        {
+          "ql": 300,
+          "value": 25000
+        }
+      ]
     },
     {
       "id": 1004,
@@ -271,7 +301,17 @@
             "value": 340
           }
         ]
-      }
+      },
+      "value": [
+        {
+          "ql": 1,
+          "value": 20
+        },
+        {
+          "ql": 300,
+          "value": 20000
+        }
+      ]
     },
     {
       "id": 2001,
@@ -325,6 +365,16 @@
             }
           ]
         }
+      ],
+      "value": [
+        {
+          "ql": 1,
+          "value": 15
+        },
+        {
+          "ql": 300,
+          "value": 15000
+        }
       ]
     },
     {
@@ -365,6 +415,16 @@
             }
           ]
         }
+      ],
+      "value": [
+        {
+          "ql": 1,
+          "value": 30
+        },
+        {
+          "ql": 300,
+          "value": 30000
+        }
       ]
     },
     {
@@ -377,7 +437,13 @@
       "requirements": [],
       "professions": [],
       "effects": [],
-      "protocol": "buff.rifle_enhancement_1"
+      "protocol": "buff.rifle_enhancement_1",
+      "value": [
+        {
+          "ql": 1,
+          "value": 120
+        }
+      ]
     },
     {
       "id": 6002,
@@ -389,7 +455,13 @@
       "requirements": [],
       "professions": [],
       "effects": [],
-      "protocol": "buff.rifle_enhancement_2"
+      "protocol": "buff.rifle_enhancement_2",
+      "value": [
+        {
+          "ql": 1,
+          "value": 900
+        }
+      ]
     },
     {
       "id": 6101,
@@ -401,7 +473,13 @@
       "requirements": [],
       "professions": [],
       "effects": [],
-      "protocol": "buff.reflex_boost_1"
+      "protocol": "buff.reflex_boost_1",
+      "value": [
+        {
+          "ql": 1,
+          "value": 300
+        }
+      ]
     },
     {
       "id": 6201,
@@ -413,7 +491,13 @@
       "requirements": [],
       "professions": [],
       "effects": [],
-      "protocol": "buff.intimidating_presence"
+      "protocol": "buff.intimidating_presence",
+      "value": [
+        {
+          "ql": 1,
+          "value": 450
+        }
+      ]
     }
   ],
   "lines": [
@@ -595,7 +679,11 @@
           "chanceBp": 500,
           "qlSpread": 2
         }
-      ]
+      ],
+      "credits": {
+        "min": 3,
+        "max": 12
+      }
     },
     {
       "id": 2,
@@ -649,7 +737,11 @@
           "chanceBp": 600,
           "qlSpread": 0
         }
-      ]
+      ],
+      "credits": {
+        "min": 8,
+        "max": 24
+      }
     }
   ],
   "zones": [
@@ -683,6 +775,17 @@
             "maxZ": 4000
           },
           "arriveX": -50000,
+          "arriveZ": 0
+        },
+        {
+          "toZone": "freeport_ashgate",
+          "area": {
+            "minX": -66000,
+            "minZ": -4000,
+            "maxX": -58000,
+            "maxZ": 4000
+          },
+          "arriveX": 50000,
           "arriveZ": 0
         }
       ]
@@ -718,6 +821,99 @@
           },
           "arriveX": 50000,
           "arriveZ": 0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "freeport_ashgate",
+      "name": "Freeport Ashgate",
+      "bounds": {
+        "minX": -150000,
+        "minZ": -150000,
+        "maxX": 150000,
+        "maxZ": 150000
+      },
+      "spawns": [],
+      "exits": [
+        {
+          "toZone": "glasswind_flats",
+          "area": {
+            "minX": 58000,
+            "minZ": -4000,
+            "maxX": 66000,
+            "maxZ": 4000
+          },
+          "arriveX": -50000,
+          "arriveZ": 0
+        }
+      ],
+      "shops": [
+        {
+          "id": 1,
+          "key": "shop.ashgate_outfitter",
+          "name": "Ashgate Outfitter",
+          "x": 20000,
+          "z": 12000,
+          "stock": [
+            {
+              "item": "rifle.combine_carbine",
+              "ql": 4
+            },
+            {
+              "item": "rifle.combine_carbine",
+              "ql": 8
+            },
+            {
+              "item": "rifle.combine_carbine",
+              "ql": 12
+            },
+            {
+              "item": "pistol.combine_sidearm",
+              "ql": 4
+            },
+            {
+              "item": "pistol.combine_sidearm",
+              "ql": 8
+            },
+            {
+              "item": "blunt.shock_maul",
+              "ql": 4
+            },
+            {
+              "item": "blunt.shock_maul",
+              "ql": 8
+            },
+            {
+              "item": "armor.marksman_gloves",
+              "ql": 4
+            },
+            {
+              "item": "armor.marksman_gloves",
+              "ql": 8
+            },
+            {
+              "item": "implant.ocular_reflex",
+              "ql": 6
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "key": "shop.lattice_exchange",
+          "name": "Lattice Exchange",
+          "x": 20000,
+          "z": -12000,
+          "stock": [
+            {
+              "item": "protocol.rifle_enhancement_1",
+              "ql": 1
+            },
+            {
+              "item": "protocol.reflex_boost_1",
+              "ql": 1
+            }
+          ]
         }
       ]
     }
@@ -917,6 +1113,11 @@
     },
     "unarmed": "unarmed.fists",
     "inventorySlots": 30,
-    "startZone": "glasswind_flats"
+    "startZone": "glasswind_flats",
+    "credits": 250
+  },
+  "economy": {
+    "sellBackBp": 1000,
+    "shopRangeMm": 5000
   }
 }

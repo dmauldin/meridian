@@ -134,7 +134,8 @@ public static class TwinkGate
         // rifle, its own buff and the Medic's buff must all arrive with it, still active.
         var pack = Meridian.Content.ContentPacks.Embedded;
         var startZone = op.World.ZoneId;
-        var exit = pack.Zones.TryGet((int)startZone, out var here) && here.Exits.Count > 0 ? here.Exits[0] : null;
+        // The gate runs Glasswind and Rustfall only, so it takes the pad to Rustfall.
+        var exit = pack.Zones.TryGet((int)startZone, out var here) ? here.Exits.FirstOrDefault(e => e.ToZoneKey == "rustfall_basin") : null;
         if (exit is null)
         {
             Console.WriteLine("M2 GATE: FAIL (the start zone has no exit)");

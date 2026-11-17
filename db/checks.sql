@@ -25,6 +25,10 @@ SELECT pg_temp.expect_error($q$UPDATE characters SET skills = '[1]'$q$, '23514')
 SELECT pg_temp.expect_error($q$UPDATE characters SET pos_x = NULL$q$, '23514'); -- placement is all or nothing
 UPDATE characters SET zone = NULL, pos_x = NULL, pos_y = NULL, pos_z = NULL, health = NULL;  -- unplaced is fine
 SELECT pg_temp.expect_error($q$UPDATE characters SET unspent_points = -1$q$, '23514');
+SELECT pg_temp.expect_error($q$UPDATE characters SET credits = -1$q$, '23514');
+SELECT pg_temp.expect_error($q$UPDATE characters SET credits = 1000000000001$q$, '23514');
+SELECT pg_temp.expect_error($q$UPDATE characters SET credits = NULL$q$, '23502');
+UPDATE characters SET credits = 1000000000000;  -- the cap itself is fine
 
 DO $$ BEGIN
   IF (SELECT version FROM characters WHERE name = 'Rook') <> 1 THEN RAISE EXCEPTION 'version should start at 1'; END IF;

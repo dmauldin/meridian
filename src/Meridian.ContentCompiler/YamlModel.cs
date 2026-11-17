@@ -29,6 +29,9 @@ internal sealed class ItemYaml
     public List<EffectYaml> Effects { get; set; } = [];
 
     public WeaponYaml? Weapon { get; set; }
+
+    /// <summary>Credits a shop charges, as a QL curve. No value: cannot be bought or sold.</summary>
+    public Dictionary<int, int>? Value { get; set; }
 }
 
 /// <summary>Exactly one of flat/percent/override. Items use QL curves; Protocols use plain numbers.</summary>
@@ -154,6 +157,9 @@ internal sealed class MobYaml
     public int Xp { get; set; }
 
     public List<LootYaml> Loot { get; set; } = [];
+
+    /// <summary>[min, max] credits dropped to the looter.</summary>
+    public List<int>? Credits { get; set; }
 }
 
 internal sealed class LootYaml
@@ -219,6 +225,39 @@ internal sealed class ZoneYaml
     public List<SpawnYaml> Spawns { get; set; } = [];
 
     public List<ExitYaml> Exits { get; set; } = [];
+
+    public List<ShopYaml> Shops { get; set; } = [];
+}
+
+/// <summary>A shop terminal at <c>at_m</c> selling <c>stock</c>.</summary>
+internal sealed class ShopYaml
+{
+    public int Id { get; set; }
+
+    public string Key { get; set; } = "";
+
+    public string Name { get; set; } = "";
+
+    [YamlMember(Alias = "at_m")]
+    public PointYaml At { get; set; } = new();
+
+    public List<StockYaml> Stock { get; set; } = [];
+}
+
+internal sealed class StockYaml
+{
+    public string Item { get; set; } = "";
+
+    public int Ql { get; set; }
+}
+
+internal sealed class EconomyYaml
+{
+    [YamlMember(Alias = "sell_back_bp")]
+    public int SellBackBp { get; set; }
+
+    [YamlMember(Alias = "shop_range_m")]
+    public double ShopRangeMetres { get; set; }
 }
 
 /// <summary>Stepping into <c>area_m</c> takes the player to zone <c>to</c>, arriving at <c>arrive_m</c>.</summary>
@@ -251,6 +290,8 @@ internal sealed class NewCharacterYaml
 
     [YamlMember(Alias = "start_zone")]
     public string StartZone { get; set; } = "";
+
+    public long Credits { get; set; }
 }
 
 internal sealed class ProfessionYaml

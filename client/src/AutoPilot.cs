@@ -16,7 +16,11 @@ namespace Meridian.Client;
 /// yourself and give yourself an item to inspect (needs the zone's MERIDIAN_DEV_COMMANDS=1).</param>
 /// <param name="Travel">Instead of fighting, walk into the zone's exit and stop 2 s after arriving in the next
 /// zone (screenshots: the pad on the way, as <c>name.pad.png</c>, and the arrival). Needs that zone running.</param>
-public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession, bool ShowUi, bool Travel = false)
+/// <param name="Shop">Walk to the nearest zone with shops, open the first, buy the cheapest item you can
+/// afford and sell it back from the inventory window, then exit 0 (screenshots: the terminal as
+/// <c>name.terminal.png</c>, the shop as <c>name.shop.png</c>, and the inventory with its Sell button). Needs that
+/// zone running.</param>
+public sealed record AutoPilotOptions(string AuthUrl, string Username, string Password, double TimeoutSeconds, string? ScreenshotPath, string Profession, bool ShowUi, bool Travel = false, bool Shop = false)
 {
     public static AutoPilotOptions? Parse(string[] args)
     {
@@ -38,7 +42,8 @@ public sealed record AutoPilotOptions(string AuthUrl, string Username, string Pa
             Arg("--screenshot", "") is { Length: > 0 } shot ? shot : null,
             Arg("--profession", "Operative"),
             args.Contains("--show-ui"),
-            args.Contains("--travel"));
+            args.Contains("--travel"),
+            args.Contains("--shop"));
     }
 }
 
@@ -62,6 +67,12 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
     private double _arrivedAt = -1;
     private bool _padShot;
     private int _pointsBefore = -1;
+    private int _shopStep;
+    private double _shopStepAt;
+    private long _creditsBefore;
+    private long _creditsBought;
+    private Meridian.Core.Content.ShopStock? _bought;
+    private int _boughtAt = -1;
     private bool _trainSeen;
 
     public override void _Ready() => view.WorldEvent += OnWorldEvent;
@@ -95,6 +106,71 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
             Shoot(options.ScreenshotPath is { } path ? System.IO.Path.ChangeExtension(path, ".pad.png") : null);
         }
         view.PilotDirection = Movement.DirectionTowards(world.Self.Position, pad);
+    }
+
+    /// <summary>Walks to a shop (through an exit if this zone has none), buys, then sells it back; see <see cref="AutoPilotOptions.Shop"/>.</summary>
+    private void Shop(ClientWorld world)
+    {
+        var pack = Meridian.Content.ContentPacks.Embedded;
+        if (!world.InWorld || world.Inventory is not { } inventory || !pack.Zones.TryGet((int)world.ZoneId, out var zone))
+        {
+            view.PilotDirection = ((short)0, (short)0);
+            return;
+        }
+        var shot = options.ScreenshotPath;
+        switch (_shopStep)
+        {
+            case 0 when world.ShopInReach() is null:
+                // Head for this zone's first shop, or the pad to a zone that has one.
+                var goal = zone.Shops.Count > 0
+                    ? zone.Shops[0].At
+                    : zone.Exits.FirstOrDefault(e => pack.Zones[e.ToZoneKey].Shops.Count > 0)?.Area.Center;
+                view.PilotDirection = goal is { } g ? Movement.DirectionTowards(world.Self.Position, g) : ((short)0, (short)0);
+                return;
+            case 0:
+                view.PilotDirection = ((short)0, (short)0);
+                (_shopStep, _shopStepAt) = (5, _elapsed); // settle a moment so the prompt is drawn
+                return;
+            case 5 when _elapsed - _shopStepAt > 0.5:
+                Shoot(shot is null ? null : System.IO.Path.ChangeExtension(shot, ".terminal.png"));
+                var shop = world.ShopInReach()!;
+                view.ToggleShop();
+                var row = Meridian.ClientState.Views.ShopView.Rows(pack, shop, inventory.Credits, world.EffectiveStats, world.Build!.Profession.Id)
+                    .Where(r => r.Affordable).OrderBy(r => r.Price).FirstOrDefault();
+                if (row is null)
+                {
+                    GD.PrintErr($"AUTOPILOT SHOP nothing affordable with {inventory.Credits} credits");
+                    GetTree().Quit(3);
+                    return;
+                }
+                _creditsBefore = inventory.Credits;
+                _bought = shop.Stock[row.StockIndex];
+                view.Session.Buy(shop.Id, row.StockIndex);
+                GD.Print($"AUTOPILOT SHOP at {shop.Name}: buying {row.Name} for {row.Price}");
+                _shopStep = 1;
+                return;
+            case 1 when inventory.Credits < _creditsBefore:
+                _creditsBought = inventory.Credits;
+                var template = pack.Items[_bought!.ItemKey];
+                _boughtAt = inventory.Carried.Where(c => c.Item == new Meridian.Core.Items.OwnedItem(template.Id, _bought.Ql)).Select(c => c.Position).DefaultIfEmpty(-1).Last();
+                (_shopStep, _shopStepAt) = (2, _elapsed);
+                return;
+            case 2 when _elapsed - _shopStepAt > 1:
+                Shoot(shot is null ? null : System.IO.Path.ChangeExtension(shot, ".shop.png"));
+                view.ToggleInventory();
+                view.InventoryWindow.SelectCarried(_boughtAt); // shows its Sell button
+                (_shopStep, _shopStepAt) = (3, _elapsed);
+                return;
+            case 3 when _elapsed - _shopStepAt > 1:
+                Shoot(shot);
+                view.Session.Sell(world.ShopInReach()!.Id, _boughtAt);
+                _shopStep = 4;
+                return;
+            case 4 when inventory.Credits > _creditsBought:
+                GD.Print($"AUTOPILOT SHOP ok: credits {_creditsBefore} -> {_creditsBought} (bought) -> {inventory.Credits} (sold) seconds={_elapsed:0.0}");
+                GetTree().Quit(0);
+                return;
+        }
     }
 
     private void Shoot(string? path)
@@ -142,6 +218,11 @@ public partial class AutoPilot(GameView view, AutoPilotOptions options) : Node
         if (options.Travel)
         {
             Travel(world);
+            return;
+        }
+        if (options.Shop)
+        {
+            Shop(world);
             return;
         }
         if (options.ShowUi && !_uiShown && _firstHitAt >= 0)

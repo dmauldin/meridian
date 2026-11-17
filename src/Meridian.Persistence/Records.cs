@@ -37,7 +37,8 @@ public sealed record CharacterRecord(
     long Version,
     IReadOnlyList<StoredItem> Items,
     IReadOnlyList<int> KnownProtocols,
-    IReadOnlyList<SavedBuff> Buffs);
+    IReadOnlyList<SavedBuff> Buffs,
+    long Credits = 0);
 
 /// <summary>A Protocol running on a character at save time (a row of <c>character_buffs</c>).</summary>
 public readonly record struct SavedBuff(int ProtocolId, int RemainingMs);

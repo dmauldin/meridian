@@ -93,6 +93,19 @@ message 112 CancelProtocol server_bound reliable_ordered
   u32 protocolId
 end
 
+# Buy one of a shop's stock (by its index in content). The zone checks the shop is here and in
+# range, and the price, credits and inventory space; the client only asks.
+message 113 BuyItem server_bound reliable_ordered
+  u32 shopId
+  u8 stockIndex
+end
+
+# Sell the item at this inventory position to a shop in range, for its sell-back price.
+message 114 SellItem server_bound reliable_ordered
+  u32 shopId
+  u8 position
+end
+
 # ---------------------------------------------------------------- server → client
 
 # contentHash identifies the server's content pack; a client with different data must not play.
@@ -219,13 +232,14 @@ struct WornItem
   bool active
 end
 
-# The receiving player's inventory and worn items, sent on join and whenever either changes
-# (including an item turning inactive or active). Names, requirements and bonuses come from
+# The receiving player's inventory, worn items and credits, sent on join and whenever any of
+# them changes (including an item turning inactive or active). Names, requirements and bonuses come from
 # the client's content pack by template id.
 message 214 InventoryState client_bound reliable_ordered
   u8 size
   list<CarriedItem>(120) carried
   list<WornItem>(32) worn
+  i64 credits
 end
 
 struct RunningProtocol

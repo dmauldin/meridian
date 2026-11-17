@@ -73,6 +73,36 @@ public class PackTests
     }
 
     [Fact]
+    public void Prices_follow_the_value_curve_and_sell_back_at_ten_percent()
+    {
+        // Tuning: changing a value curve, the sell-back rate or a shop's stock changes this test.
+        var pack = ContentPacks.Embedded;
+        var carbine = pack.Items["rifle.combine_carbine"];
+        // 25 + (25000 - 25) * 3 / 299 = 275.6, rounded half away from zero.
+        Assert.Equal(276, carbine.ValueAt(4));
+        Assert.Equal(27, pack.Economy.SellPrice(carbine, 4)); // 10%, rounded down
+        Assert.Equal(2, pack.Economy.SellPrice(carbine, 1));
+        Assert.Null(pack.Items["unarmed.fists"].ValueAt(1));
+        Assert.Null(pack.Economy.SellPrice(pack.Items["unarmed.fists"], 1));
+        Assert.Equal((1000, 5_000), (pack.Economy.SellBackBp, pack.Economy.ShopRangeMm));
+        Assert.Equal(250, pack.NewCharacter.Credits);
+
+        var outfitter = pack.Shops["shop.ashgate_outfitter"];
+        Assert.Equal(3u, pack.ZoneOfShop(outfitter.Id));
+        Assert.Equal(
+            [276, 610, 944, 220, 488, 276, 610, 165, 366, 531],
+            outfitter.Stock.Select(s => pack.Items[s.ItemKey].ValueAt(s.Ql)!.Value));
+    }
+
+    [Fact]
+    public void Adding_credits_saturates_at_the_cap()
+    {
+        Assert.Equal(15, EconomyDef.AddCredits(10, 5));
+        Assert.Equal(EconomyDef.MaxCredits, EconomyDef.AddCredits(EconomyDef.MaxCredits - 1, 5));
+        Assert.Equal(EconomyDef.MaxCredits, EconomyDef.AddCredits(EconomyDef.MaxCredits, long.MaxValue));
+    }
+
+    [Fact]
     public void Items_resolve_requirements_and_effects_at_a_quality_level()
     {
         var kestrel = ContentPacks.Embedded.Items["rifle.kestrel_mk2"];
@@ -132,7 +162,7 @@ public class ValidationTests : IDisposable
     [InlineData("items/weapons.yaml", "attack_skill: Rifle", "attack_skill: Rifel", "not a valid Stat")]
     [InlineData("items/weapons.yaml", "id: 1002", "id: 1001", "Duplicate item id 1001")]
     [InlineData("items/weapons.yaml", "max_damage: { 1: 30, 300: 700 }", "max_damage: { 1: 10, 300: 700 }", "need 0 <= min <= max")]
-    [InlineData("items/weapons.yaml", "slot: TwoHand\n  ql: [1, 300]\n  professions", "slot: Hands\n  ql: [1, 300]\n  professions", "hand slot")]
+    [InlineData("items/weapons.yaml", "slot: TwoHand\n  ql: [1, 300]\n  value: { 1: 40,", "slot: Hands\n  ql: [1, 300]\n  value: { 1: 40,", "hand slot")]
     [InlineData("items/weapons.yaml", "range_m: 25", "rnage_m: 25", "rnage_m")]
     [InlineData("items/armor.yaml", "ql: [1, 300]", "ql: [1, 400]", "ql must be")]
     [InlineData("items/armor.yaml", "{ stat: Rifle, flat:", "{ stat: Rifle, percent: { 1: 1 }, flat:", "exactly one of")]
@@ -162,6 +192,18 @@ public class ValidationTests : IDisposable
     [InlineData("mobs/creatures.yaml", "item: rifle.kestrel_mk2", "item: rifle.kestrel_mk3", "unknown item")]
     [InlineData("mobs/creatures.yaml", "chance: 500", "chance: 20000", "chance 1..10000")]
     [InlineData("progression.yaml", "expensive: { cost_per_point: 4", "expensive: { cost_per_point: 0", "positive cost and cap")]
+    [InlineData("zones/freeport_ashgate.yaml", "{ item: rifle.combine_carbine, ql: 4 }", "{ item: rifle.combine_carbin, ql: 4 }", "is unknown, has no value")]
+    [InlineData("zones/freeport_ashgate.yaml", "{ item: rifle.combine_carbine, ql: 4 }", "{ item: unarmed.fists, ql: 1 }", "is unknown, has no value")]
+    [InlineData("zones/freeport_ashgate.yaml", "{ item: rifle.combine_carbine, ql: 4 }", "{ item: rifle.combine_carbine, ql: 400 }", "outside its QL range")]
+    [InlineData("zones/freeport_ashgate.yaml", "at_m: { x: 20, z: 12 }", "at_m: { x: 62, z: 0 }", "off its exits")]
+    [InlineData("zones/freeport_ashgate.yaml", "at_m: { x: 20, z: 12 }", "at_m: { x: 200, z: 12 }", "inside the zone")]
+    [InlineData("zones/freeport_ashgate.yaml", "  - id: 2\n", "  - id: 1\n", "Duplicate shop id 1")]
+    [InlineData("items/weapons.yaml", "value: { 1: 25, 300: 25000 }", "value: { 1: 0, 300: 25000 }", "at least 1 credit")]
+    [InlineData("mobs/creatures.yaml", "credits: [3, 12]", "credits: [12, 3]", "0 <= min <= max")]
+    [InlineData("mobs/creatures.yaml", "credits: [3, 12]", "credits: [3]", "credits must be [min, max]")]
+    [InlineData("new_character.yaml", "credits: 250", "credits: -1", "credits must be 0..")]
+    [InlineData("economy.yaml", "sell_back_bp: 1000", "sell_back_bp: 20000", "sell_back_bp must be")]
+    [InlineData("economy.yaml", "shop_range_m: 5", "shop_range_m: 500", "shop_range_m 1..50")]
     public void Each_rule_catches_its_mistake(string file, string find, string replace, string expected)
     {
         var errors = CompileWith(file, find, replace);

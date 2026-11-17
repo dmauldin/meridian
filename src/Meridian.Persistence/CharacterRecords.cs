@@ -17,7 +17,7 @@ public static class CharacterRecords
         var kit = pack.Items[build.Profession.StartingWeaponKey];
         StoredItem[] items = [new(ItemLocation.Worn, (int)kit.Slot, kit.Id, kit.ClampQl(build.Profession.StartingWeaponQl))];
         int[] known = [.. build.Profession.StartingProtocols.Select(k => pack.Protocols[k].Id).Order()];
-        return new CharacterRecord(0, accountId, name, profession, origin, build.Level, build.Xp, build.UnspentPoints, build.Trained(), null, 0, items, known, []);
+        return new CharacterRecord(0, accountId, name, profession, origin, build.Level, build.Xp, build.UnspentPoints, build.Trained(), null, 0, items, known, [], pack.NewCharacter.Credits);
     }
 
     /// <summary>Fills <paramref name="outfit"/> from the record. Returns what it could not place (see <see cref="Outfit.Load"/>).</summary>
@@ -56,10 +56,10 @@ public static class CharacterRecords
         return CharacterBuild.Load(pack, record.Profession, record.Origin, record.Level, record.Xp, record.UnspentPoints, record.Trained);
     }
 
-    /// <summary>The record with new progression, placement, items and Protocols; identity and version unchanged.</summary>
+    /// <summary>The record with new progression, placement, items, Protocols and credits; identity and version unchanged.</summary>
     public static CharacterRecord WithProgress(
         this CharacterRecord record, CharacterBuild build, Placement placement, IReadOnlyList<StoredItem> items,
-        IReadOnlyList<int> knownProtocols, IReadOnlyList<SavedBuff> buffs)
+        IReadOnlyList<int> knownProtocols, IReadOnlyList<SavedBuff> buffs, long credits)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(build);
@@ -73,6 +73,7 @@ public static class CharacterRecords
             Items = items,
             KnownProtocols = knownProtocols,
             Buffs = buffs,
+            Credits = credits,
         };
     }
 }

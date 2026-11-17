@@ -43,10 +43,14 @@ public sealed record ItemTemplate(
     IReadOnlyList<Profession> Professions,
     IReadOnlyList<ScaledEffect> Effects,
     WeaponTemplate? Weapon,
-    string? ProtocolKey = null)
+    string? ProtocolKey = null,
+    QlCurve? Value = null)
 {
     /// <summary>True for an item that teaches a Protocol when uploaded (it has no slot).</summary>
     public bool IsProtocol => ProtocolKey is not null;
+
+    /// <summary>What a shop charges for this item at <paramref name="ql"/>, or null if it has no price (cannot be bought or sold).</summary>
+    public long? ValueAt(int ql) => Value?.At(ClampQl(ql));
 
     /// <summary>Clamps <paramref name="ql"/> into this template's range.</summary>
     public int ClampQl(int ql) => Math.Clamp(ql, MinQl, MaxQl);
@@ -148,7 +152,8 @@ public sealed record MobDef(
     int SpeedMmPerSecond,
     int RespawnMs,
     int Xp,
-    IReadOnlyList<LootDef> Loot)
+    IReadOnlyList<LootDef> Loot,
+    CreditDrop? Credits = null)
 {
     public void ApplyStats(StatBlock block)
     {
@@ -164,7 +169,41 @@ public sealed record MobDef(
 /// <summary>Mobs of one kind spawned in a ring around a point.</summary>
 public sealed record SpawnGroup(string MobKey, int Count, Position Center, int InnerRadiusMm, int OuterRadiusMm);
 
-public sealed record ZoneDef(uint Id, string Key, string Name, ZoneBounds Bounds, IReadOnlyList<SpawnGroup> Spawns, IReadOnlyList<ZoneExit> Exits);
+public sealed record ZoneDef(uint Id, string Key, string Name, ZoneBounds Bounds, IReadOnlyList<SpawnGroup> Spawns, IReadOnlyList<ZoneExit> Exits, IReadOnlyList<ShopDef> Shops);
+
+/// <summary>
+/// A shop terminal standing at <paramref name="At"/>: sells its stock at full value and buys any
+/// item with a value at <see cref="EconomyDef.SellBackBp"/> of it, to players within
+/// <see cref="EconomyDef.ShopRangeMm"/>.
+/// </summary>
+/// <param name="Id">Stable id across all zones: the wire names a shop by it. Append-only.</param>
+public sealed record ShopDef(int Id, string Key, string Name, Position At, IReadOnlyList<ShopStock> Stock);
+
+/// <summary>One item a shop always has, at a fixed QL.</summary>
+public sealed record ShopStock(string ItemKey, int Ql);
+
+/// <summary>Credits a mob drops to its looter: uniform in <paramref name="Min"/>..<paramref name="Max"/>.</summary>
+public sealed record CreditDrop(int Min, int Max);
+
+/// <summary>Rules for credits that are not about one item.</summary>
+/// <param name="SellBackBp">What a shop pays for an item, in basis points of its value (the design doc: 10% or less).</param>
+/// <param name="ShopRangeMm">How close a player must stand to a shop terminal to trade with it.</param>
+public sealed record EconomyDef(int SellBackBp, int ShopRangeMm)
+{
+    /// <summary>The most credits one character can hold: far beyond play, far from overflowing a long.</summary>
+    public const long MaxCredits = 1_000_000_000_000;
+
+    /// <summary>What a shop pays for <paramref name="template"/> at <paramref name="ql"/> (rounded down), or null if it has no value.</summary>
+    public long? SellPrice(ItemTemplate template, int ql)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        return template.ValueAt(ql) is { } value ? value * SellBackBp / 10_000 : null;
+    }
+
+    /// <summary><paramref name="balance"/> plus <paramref name="amount"/>, capped at <see cref="MaxCredits"/>.</summary>
+    public static long AddCredits(long balance, long amount) =>
+        amount >= MaxCredits - balance ? MaxCredits : balance + amount;
+}
 
 /// <summary>
 /// A way out of a zone: stepping into <paramref name="Area"/> hands the player to
@@ -177,7 +216,8 @@ public sealed record ZoneExit(string ToZoneKey, ZoneBounds Area, Position Arrive
 /// <param name="UnarmedKey">The weapon item used when no active weapon is worn.</param>
 /// <param name="InventorySlots">How many items a character can carry besides what it wears.</param>
 /// <param name="StartZoneKey">Where a new character first enters the world.</param>
-public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats, string UnarmedKey, int InventorySlots, string StartZoneKey);
+/// <param name="Credits">What a new character starts with.</param>
+public sealed record NewCharacterDef(IReadOnlyDictionary<Stat, int> Stats, string UnarmedKey, int InventorySlots, string StartZoneKey, long Credits);
 
 /// <summary>
 /// One possible drop. Each entry rolls on its own when the mob dies. The QL is the mob's level

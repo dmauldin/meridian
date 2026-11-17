@@ -74,7 +74,13 @@ public static class Compiler
         var newCharacterFile = Path.Combine(contentDirectory, "new_character.yaml");
         if (Load<NewCharacterYaml>(newCharacterFile, errors) is { } nc)
         {
-            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal), nc.Unarmed, nc.InventorySlots, nc.StartZone);
+            newCharacter = new NewCharacterDto(new SortedDictionary<string, int>(nc.Stats, StringComparer.Ordinal), nc.Unarmed, nc.InventorySlots, nc.StartZone, nc.Credits);
+        }
+        EconomyDto? economy = null;
+        var economyFile = Path.Combine(contentDirectory, "economy.yaml");
+        if (Load<EconomyYaml>(economyFile, errors) is { } ey)
+        {
+            Guard(errors, economyFile, "economy", () => economy = new EconomyDto(ey.SellBackBp, Mm(ey.ShopRangeMetres, "shop_range_m")));
         }
 
         var professions = new List<ProfessionDto>();
@@ -96,7 +102,7 @@ public static class Compiler
             Guard(errors, progressionFile, "progression", () => progression = Checked(Progression(py), d => ContentPacks.ToModel(d)));
         }
 
-        if (errors.Count > 0 || newCharacter is null || progression is null)
+        if (errors.Count > 0 || newCharacter is null || progression is null || economy is null)
         {
             return new CompileResult(null, errors);
         }
@@ -111,7 +117,8 @@ public static class Compiler
             [.. professions.OrderBy(p => p.Id)],
             [.. origins.OrderBy(o => o.Id)],
             progression,
-            newCharacter);
+            newCharacter,
+            economy);
 
         // Validate through the same path the server uses to load, then emit canonical JSON.
         try
@@ -147,7 +154,8 @@ public static class Compiler
                 ? new WeaponDto(w.AttackSkill, w.Initiative, w.Defence, w.DamageType, Positive(w.AttackTimeMs, "attack_time_ms"),
                     Mm(w.RangeMetres, "range_m"), Anchors(w.MinDamage), Anchors(w.MaxDamage))
                 : null,
-            y.Protocol);
+            y.Protocol,
+            y.Value is { } value ? Anchors(value) : null);
     }
 
     private static ProtocolDto Protocol(ProtocolYaml y, Dictionary<string, int> lineIds)
@@ -182,7 +190,13 @@ public static class Compiler
                 Mm(a.RangeMetres, "range_m"), a.MinDamage, a.MaxDamage),
             Mm(y.AggroMetres, "aggro_m", allowZero: true), Mm(y.LeashMetres, "leash_m"), Mm(y.SpeedMetresPerSecond, "speed_m_s"), Ms(y.RespawnSeconds, "respawn_s"),
             NonNegative(y.Xp, "xp"),
-            y.Loot.Select(l => new LootDto(l.Item, l.Chance, l.QlSpread)).ToList());
+            y.Loot.Select(l => new LootDto(l.Item, l.Chance, l.QlSpread)).ToList(),
+            y.Credits switch
+            {
+                null => null,
+                [var min, var max] => new CreditsDto(min, max),
+                _ => throw new InvalidDataException("credits must be [min, max]"),
+            });
     }
 
     private static ProfessionDto Profession(ProfessionYaml y)
@@ -252,6 +266,11 @@ public static class Compiler
                 Mm(e.Area.MaxX, "area_m", signed: true), Mm(e.Area.MaxZ, "area_m", signed: true));
             Require(area.MinX < area.MaxX && area.MinZ < area.MaxZ, "area_m must have min < max");
             return new ExitDto(e.To, area, Mm(e.Arrive.X, "arrive_m", signed: true), Mm(e.Arrive.Z, "arrive_m", signed: true));
+        }).ToList(), y.Shops.Count == 0 ? null : y.Shops.Select(s =>
+        {
+            Require(s.Id > 0, "shop id must be positive");
+            return new ShopDto(s.Id, s.Key, s.Name, Mm(s.At.X, "at_m", signed: true), Mm(s.At.Z, "at_m", signed: true),
+                s.Stock.Select(i => new StockDto(i.Item, i.Ql)).ToList());
         }).ToList());
     }
 

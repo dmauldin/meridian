@@ -94,7 +94,14 @@ public sealed class Player : Entity
         Outfit = outfit;
         Lattice = lattice;
         _unarmed = unarmed;
+        Credits = record.Credits;
     }
+
+    /// <summary>Credits held, 0..<see cref="Meridian.Core.Content.EconomyDef.MaxCredits"/>. Saved with the character.</summary>
+    public long Credits { get; internal set; }
+
+    /// <summary>The balance last sent in <c>InventoryState</c>.</summary>
+    internal long LastSentCredits { get; set; } = -1;
 
     /// <summary>Known Protocols, energy, and the Protocols running on this player.</summary>
     public Lattice Lattice { get; }
@@ -135,7 +142,7 @@ public sealed class Player : Entity
     public ulong CharacterId => Record.Id;
 
     /// <summary>What a save would capture; when it differs from <see cref="LastSavedKey"/> a checkpoint is due.</summary>
-    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health, Outfit.Revision, Lattice.Revision);
+    internal SaveKey SaveKey => new(Character.Stats.Revision, Build.Xp, Build.UnspentPoints, Position, Dead ? 0 : Health, Outfit.Revision, Lattice.Revision, Credits);
 
     internal SaveKey LastSavedKey { get; set; }
 
@@ -164,7 +171,7 @@ public sealed class Player : Entity
 }
 
 /// <summary>What <c>SelfStatus</c> last told the player, to send only changes.</summary>
-internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health, long OutfitRevision, long LatticeRevision);
+internal readonly record struct SaveKey(long StatsRevision, long Xp, int Points, Position Position, int Health, long OutfitRevision, long LatticeRevision, long Credits);
 
 internal readonly record struct SelfStatusKey(int Health, int MaxHealth, uint TargetId, bool Attacking, bool Dead, int RunSpeed, int Energy, int MaxEnergy);
 

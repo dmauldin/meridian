@@ -15,7 +15,10 @@ public sealed record PackDto(
     List<ProfessionDto> Professions,
     List<OriginDto> Origins,
     ProgressionDto Progression,
-    NewCharacterDto NewCharacter);
+    NewCharacterDto NewCharacter,
+    EconomyDto Economy);
+
+public sealed record EconomyDto(int SellBackBp, int ShopRangeMm);
 
 public sealed record AnchorDto(int Ql, int Value);
 
@@ -44,7 +47,8 @@ public sealed record ItemDto(
     List<string> Professions,
     List<ScaledEffectDto> Effects,
     WeaponDto? Weapon,
-    string? Protocol = null);
+    string? Protocol = null,
+    List<AnchorDto>? Value = null);
 
 public sealed record LineDto(int Id, string Key, string Name);
 
@@ -88,7 +92,10 @@ public sealed record MobDto(
     int SpeedMmPerSecond,
     int RespawnMs,
     int Xp,
-    List<LootDto> Loot);
+    List<LootDto> Loot,
+    CreditsDto? Credits = null);
+
+public sealed record CreditsDto(int Min, int Max);
 
 public sealed record LootDto(string Item, int ChanceBp, int QlSpread);
 
@@ -96,11 +103,15 @@ public sealed record BoundsDto(int MinX, int MinZ, int MaxX, int MaxZ);
 
 public sealed record SpawnDto(string MobKey, int Count, int CenterX, int CenterZ, int InnerRadiusMm, int OuterRadiusMm);
 
-public sealed record ZoneDto(uint Id, string Key, string Name, BoundsDto Bounds, List<SpawnDto> Spawns, List<ExitDto>? Exits = null);
+public sealed record ZoneDto(uint Id, string Key, string Name, BoundsDto Bounds, List<SpawnDto> Spawns, List<ExitDto>? Exits = null, List<ShopDto>? Shops = null);
+
+public sealed record ShopDto(int Id, string Key, string Name, int X, int Z, List<StockDto> Stock);
+
+public sealed record StockDto(string Item, int Ql);
 
 public sealed record ExitDto(string ToZone, BoundsDto Area, int ArriveX, int ArriveZ);
 
-public sealed record NewCharacterDto(SortedDictionary<string, int> Stats, string Unarmed, int InventorySlots, string StartZone);
+public sealed record NewCharacterDto(SortedDictionary<string, int> Stats, string Unarmed, int InventorySlots, string StartZone, long Credits);
 
 public sealed record ProfessionDto(
     int Id,

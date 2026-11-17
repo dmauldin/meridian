@@ -62,6 +62,25 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
     /// <summary>The player's items as the server last sent them; null until the first update.</summary>
     public ClientInventory? Inventory { get; private set; }
 
+    /// <summary>
+    /// The nearest shop in this zone close enough to trade with, by the client's own position
+    /// (the zone checks again). Null when none is, or before Welcome.
+    /// </summary>
+    public Meridian.Core.Content.ShopDef? ShopInReach()
+    {
+        var pack = Meridian.Content.ContentPacks.Embedded;
+        if (!InWorld || !pack.Zones.TryGet((int)ZoneId, out var zone))
+        {
+            return null;
+        }
+        return zone.Shops
+            .Select(s => (Shop: s, Distance: Meridian.Core.World.Movement.Distance(Self.Position, s.At)))
+            .Where(s => s.Distance <= pack.Economy.ShopRangeMm)
+            .OrderBy(s => s.Distance)
+            .Select(s => s.Shop)
+            .FirstOrDefault();
+    }
+
     /// <summary>Effective stat values from the latest sheet (base values live in <see cref="Build"/>).</summary>
     public IReadOnlyDictionary<Stat, int> EffectiveStats => _effective;
 
@@ -283,7 +302,8 @@ public sealed class ClientWorld : IClientBoundHandler<GameConnection>
         Inventory = new ClientInventory(
             message.Size,
             [.. (message.Carried ?? []).Select(c => (Position: (int)c.Position, Item: new OwnedItem((int)c.TemplateId, c.Ql)))],
-            [.. (message.Worn ?? []).Select(w => (Slot: (EquipSlot)w.Slot, Item: new OwnedItem((int)w.TemplateId, w.Ql), w.Active))]);
+            [.. (message.Worn ?? []).Select(w => (Slot: (EquipSlot)w.Slot, Item: new OwnedItem((int)w.TemplateId, w.Ql), w.Active))],
+            message.Credits);
         _events.Add(new InventoryChanged());
     }
 

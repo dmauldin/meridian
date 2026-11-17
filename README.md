@@ -7,7 +7,7 @@ names and systems are original.
 - Design: [Game Design Document](https://claude.ai/artifact/8FGVNSTFDMqDiQZ9AN5WzB)
 - Architecture: [Technical Architecture & Roadmap](https://claude.ai/artifact/6owmrpxx4VkgdvmS3wDvvQ)
 
-## Status: M0, M1 and M2 complete
+## Status: M0, M1 and M2 complete; M3 (vertical slice) in progress
 
 | Gate | Result |
 | --- | --- |
@@ -15,6 +15,8 @@ names and systems are original.
 | M1: 2 players kill a mob together over the net | **Pass with the real client.** `scripts/m1-gate.sh` runs two headless Godot clients on autopilot; both hit the same skitter and see it die (~21 s). Also covered server-side by `EndToEndTests`. |
 | M2: twink a rifle with another player's buff | **Pass.** `scripts/m2-gate.sh`: an Operative cannot wear a QL 1 Kestrel Mk2 alone, can once a Medic's Reflex Boost lands, walks it into a second zone (still worn and active, same connection), and it goes inactive when the buff is dropped (~18 s). |
 | Combat load: 100 hunting bots vs 40 mobs | 20.00 Hz, p99 tick work 1.5–3.9 ms, 0 overruns, 1,802 hits and 114 kills in 60 s |
+
+M3 so far: credits, Freeport Ashgate and its shops (see [Credits and shops](#credits-and-shops-m3)).
 
 Headroom check, same machine: 300 bots still held 20 Hz with no overruns; p99 tick work
 was 10–20 ms, much of it CPU contention from the 300 bot network threads sharing two cores.
@@ -88,14 +90,17 @@ dotnet run --project src/Meridian.Server.Auth
 dotnet run --project src/Meridian.Bots -- --count 10 --duration 30
 ```
 
-That runs one zone, Glasswind Flats. To also run Rustfall Basin, start a second zone and tell
-the gateway about both (see [Zones](#zones-m2)):
+That runs one zone, Glasswind Flats. To run all three, start a zone process for each and tell
+the gateway about them (see [Zones](#zones-m2)):
 
 ```bash
-MERIDIAN_ZONE_KEY=glasswind_flats MERIDIAN_ZONE_PORT=7800 dotnet run --project src/Meridian.Server.Zone
-MERIDIAN_ZONE_KEY=rustfall_basin  MERIDIAN_ZONE_PORT=7801 dotnet run --project src/Meridian.Server.Zone
-MERIDIAN_ZONES="1@127.0.0.1:7800,2@127.0.0.1:7801" dotnet run --project src/Meridian.Server.Gateway
+MERIDIAN_ZONE_KEY=glasswind_flats  MERIDIAN_ZONE_PORT=7800 dotnet run --project src/Meridian.Server.Zone
+MERIDIAN_ZONE_KEY=rustfall_basin   MERIDIAN_ZONE_PORT=7801 dotnet run --project src/Meridian.Server.Zone
+MERIDIAN_ZONE_KEY=freeport_ashgate MERIDIAN_ZONE_PORT=7802 dotnet run --project src/Meridian.Server.Zone
+MERIDIAN_ZONES="1@127.0.0.1:7800,2@127.0.0.1:7801,3@127.0.0.1:7802" dotnet run --project src/Meridian.Server.Gateway
 ```
+
+A pad to a zone that is not running drops the player with "That area is unavailable right now."
 
 To use Postgres instead of the file, migrate a database and point every service at it:
 
@@ -126,7 +131,8 @@ Q toggles auto-attack, Esc clears the target, Enter chats. C opens the character
 (train skills with +1/+5), I the inventory (click an item for its requirements against your
 stats, then Equip, Unequip, Upload or Discard), and 1-9 cast the Protocols on the bar along the
 bottom: on your target if it is a player, otherwise on yourself. Running buffs show under your
-health and energy; right-click one to drop it. The chat commands (`/train`, `/inv`, `/cast`
+health and energy; right-click one to drop it. F, beside a shop terminal, opens the shop
+(sell from the inventory while it is in reach). The chat commands (`/train`, `/inv`, `/cast`
 and so on, `/help` lists them) still work.
 
 Headless autoplay (what the M1 gate uses):
@@ -276,9 +282,10 @@ lands, and the rifle goes inactive when that buff is dropped.
 ## Zones (M2)
 
 Each zone is its own process with its own simulation and tick; the gateway holds one link per
-zone and routes each session to the zone that owns it. There are two zones: Glasswind Flats
-(id 1, skitters, where new characters start) and Rustfall Basin (id 2, level 6 striders). Each
-has an exit pad at its edge (`exits` in content) that leads to the other.
+zone and routes each session to the zone that owns it. There are three zones: Glasswind Flats
+(id 1, skitters, where new characters start), with pads east to Rustfall Basin (id 2, level 6
+striders) and west to Freeport Ashgate (id 3, the city: shops, no mobs). Each pad's zone has
+one back (`exits` in content).
 
 - **Config**: a zone serves `MERIDIAN_ZONE_KEY` (default `glasswind_flats`); the gateway's
   `MERIDIAN_ZONES` is `id@host:port,...` (default: zone 1 only). On connecting, a zone sends
@@ -306,6 +313,26 @@ is still worn and active, on the same connection. The load bots steer clear of e
 single-zone M0 gate measures what it always did. The autopilot's `--travel` walks a real client
 across (and with `--screenshot`, saves the pad and the arrival).
 
+## Credits and shops (M3)
+
+Credits are the currency (the design doc's side currencies, mission tokens and faction merits,
+come later). Every number is content (`content/README.md`, Economy).
+
+- **Earning**: mobs drop credits to whoever looted them (skitters 3-12, striders 8-24), rolled
+  like loot. New characters start with 250. Balances are saved with the character and capped
+  at 10^12.
+- **Shops**: terminals in Freeport Ashgate: the Ashgate Outfitter (weapons, gloves and an
+  implant at QL 4-12) and the Lattice Exchange (Protocol items). Stock is unlimited and sells at
+  the item's `value`, a QL curve (a QL 4 carbine is 276).
+- **Selling**: any shop buys any item with a value for a tenth of it, rounded down (the design
+  doc's anti-inflation rule), so credits come from play, not from flipping shop stock.
+- **Trust**: buying and selling are intents (`BuyItem`, `SellItem`). The zone checks the shop is
+  in this zone and within 5 m, then the price, balance and inventory space, and applies the
+  trade in one step; every refusal says why.
+- **Client**: walk up to a terminal and press F; sell from the inventory window (I) while a
+  shop is in reach. `--autopilot --shop` plays this through the real client (walks from
+  Glasswind Flats into the city, buys, sells back) and saves screenshots with `--screenshot`.
+
 ## Client UI (M2)
 
 Windows are built in code (`client/src/Ui/`) until there is real UI art. What they show comes
@@ -330,7 +357,9 @@ With a display (or `xvfb-run`) and `--screenshot`, it also saves a frame of the 
   batches are small today. Batching several characters per transaction comes when load says so.
 - **Casts are instant** and there is no Protocol initiative or cast bar yet; energy is not saved
   (full on login).
-- **Items have no ids yet**: an item is identified by where it sits. Trading (M3) adds ids.
+- **Items have no ids yet**: an item is identified by where it sits. Player trading (M3) adds ids.
+- **The city is a flat map with two terminals**: no buildings, bank, mission terminals or
+  safe-zone rule yet (it simply has no mobs). Shops have unlimited stock and fixed prices.
 - **Characters with no items at all get their kit on join**, so characters created before
   items existed are not left unarmed. Discarding everything therefore brings the kit back.
 - **Zones are separate maps joined by pads**: nothing is seen across a zone border, and a

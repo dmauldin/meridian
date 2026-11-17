@@ -7,6 +7,8 @@ unarmed: unarmed.fists
 start_zone: glasswind_flats
 # Inventory positions besides what is worn.
 inventory_slots: 30
+# Starting credits: enough for one small upgrade in Freeport Ashgate.
+credits: 250
 
 stats:
   Level: 1

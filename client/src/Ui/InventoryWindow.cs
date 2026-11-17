@@ -7,14 +7,16 @@ using Meridian.Core.Items;
 namespace Meridian.Client.Ui;
 
 /// <summary>
-/// Worn slots and carried items. Click one to see its requirements (against your current
-/// stats) and bonuses, and to equip, unequip, upload or discard it. Inactive worn items show red.
+/// Worn slots, carried items and credits. Click an item to see its requirements (against your
+/// current stats) and bonuses, and to equip, unequip, upload or discard it, or sell it while a
+/// shop terminal is in reach. Inactive worn items show red.
 /// </summary>
 public partial class InventoryWindow : GameWindow
 {
     private readonly GridContainer _worn = new() { Columns = 2 };
     private readonly GridContainer _carried = new() { Columns = 2 };
     private readonly Label _count = UiStyle.Label("", UiStyle.Muted, 12);
+    private readonly Label _credits = UiStyle.Label("", UiStyle.Text, 13);
     private readonly VBoxContainer _details = new();
     private GameSession? _session;
     private (bool Worn, int Key)? _selected;
@@ -31,6 +33,8 @@ public partial class InventoryWindow : GameWindow
         var carriedHeader = new HBoxContainer();
         carriedHeader.AddChild(UiStyle.Label("Carried", UiStyle.Accent, 15));
         carriedHeader.AddChild(_count);
+        carriedHeader.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        carriedHeader.AddChild(_credits);
         lists.AddChild(carriedHeader);
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         _carried.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -74,6 +78,7 @@ public partial class InventoryWindow : GameWindow
         _worn.AddChild(UiStyle.Label($"{empty} empty slots", UiStyle.Muted, 12));
 
         _count.Text = $"  {inventory.Carried.Count}/{inventory.Size}";
+        _credits.Text = ShopView.Credits(inventory.Credits);
         foreach (var (position, item) in inventory.Carried)
         {
             _carried.AddChild(UiStyle.Label($"#{position}", UiStyle.Muted, 12));
@@ -160,6 +165,14 @@ public partial class InventoryWindow : GameWindow
                         _selected = null;
                     }),
                 });
+            }
+            if (_session.World.ShopInReach() is { } shop && ShopView.SellPrice(pack, chosen) is { } price)
+            {
+                actions.AddChild(Action($"Sell ({ShopView.Credits(price)})", () =>
+                {
+                    _session.Sell(shop.Id, key);
+                    _selected = null;
+                }));
             }
         }
         _details.AddChild(actions);

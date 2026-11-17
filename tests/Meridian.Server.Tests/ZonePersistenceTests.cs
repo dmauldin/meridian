@@ -40,6 +40,16 @@ public class ZoneCheckpointTests
     }
 
     [Fact]
+    public void Credits_load_with_the_character_and_go_into_its_saves()
+    {
+        var sim = Zone();
+        var p = sim.Join(A, Stored() with { Credits = 77 })!;
+        Assert.Equal(77, p.Credits);
+        Assert.Equal(77, sim.Snapshot(p).Credits);
+        Assert.Equal(250, CharacterRecords.New(Pack, 1, "Wren", Profession.Medic, Origin.Baseline).Credits); // new_character.yaml
+    }
+
+    [Fact]
     public void Saved_health_never_exceeds_the_current_maximum()
     {
         var sim = Zone();
@@ -421,7 +431,7 @@ public sealed class PlayerSessionTests : IDisposable
         {
             _sim.Step();
         }
-        var exit = Meridian.Content.ContentPacks.Embedded.Zones["glasswind_flats"].Exits.Single();
+        var exit = Meridian.Content.ContentPacks.Embedded.Zones["glasswind_flats"].Exits.Single(e => e.ToZoneKey == "rustfall_basin");
         _sim.FindCharacter(rook.Id)!.Position = exit.Area.Center;
         _sim.Step();
 
