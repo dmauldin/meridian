@@ -1,28 +1,75 @@
 # Local stack: docker compose -f deploy/docker-compose.yml up --build
 # Secrets come from deploy/.env (copy deploy/.env.example). Never commit real keys.
+#
+# Postgres holds accounts and characters; `migrate` applies db/migrations before anything that
+# uses the database starts. Two zones (Glasswind Flats, Rustfall Basin) sit behind one gateway.
 name: meridian
 
+x-store: &store
+  MERIDIAN_STORE: postgres
+  MERIDIAN_DATABASE_URL: postgres://meridian:${MERIDIAN_DB_PASSWORD:?set in deploy/.env}@postgres:5432/meridian
+
+x-after-migrate: &after-migrate
+  migrate: { condition: service_completed_successfully }
+
 services:
-  zone:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: meridian
+      POSTGRES_DB: meridian
+      POSTGRES_PASSWORD: ${MERIDIAN_DB_PASSWORD:?set in deploy/.env}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    # Not published: only the services talk to it.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "meridian", "-d", "meridian"]
+      interval: 2s
+      retries: 30
+
+  migrate:
+    # The same runner as development and CI, with psql from the Postgres image.
+    image: postgres:16
+    volumes: ["../db:/db:ro", "../scripts:/scripts:ro"]
+    entrypoint: ["bash", "/scripts/db-migrate.sh", "postgres://meridian:${MERIDIAN_DB_PASSWORD:?set in deploy/.env}@postgres:5432/meridian"]
+    depends_on: { postgres: { condition: service_healthy } }
+
+  zone-glasswind:
     build: { context: .., dockerfile: deploy/Dockerfile, target: zone }
     environment:
+      <<: *store
+      MERIDIAN_ZONE_KEY: glasswind_flats
       MERIDIAN_INTERNAL_KEY: ${MERIDIAN_INTERNAL_KEY:?set in deploy/.env}
-    # Not published: only the gateway talks to the zone.
+    # Not published: only the gateway talks to the zones.
     expose: ["7800/udp"]
+    depends_on: *after-migrate
+
+  zone-rustfall:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: zone }
+    environment:
+      <<: *store
+      MERIDIAN_ZONE_KEY: rustfall_basin
+      MERIDIAN_INTERNAL_KEY: ${MERIDIAN_INTERNAL_KEY:?set in deploy/.env}
+    expose: ["7800/udp"]
+    depends_on: *after-migrate
 
   gateway:
     build: { context: .., dockerfile: deploy/Dockerfile, target: gateway }
     environment:
-      MERIDIAN_ZONE_HOST: zone
+      MERIDIAN_ZONES: 1@zone-glasswind:7800,2@zone-rustfall:7800
       MERIDIAN_INTERNAL_KEY: ${MERIDIAN_INTERNAL_KEY:?set in deploy/.env}
       MERIDIAN_TICKET_KEY: ${MERIDIAN_TICKET_KEY:?set in deploy/.env}
     ports: ["7777:7777/udp"]
-    depends_on: [zone]
+    depends_on: [zone-glasswind, zone-rustfall]
 
   auth:
     build: { context: .., dockerfile: deploy/Dockerfile, target: auth }
     environment:
+      <<: *store
       MERIDIAN_TICKET_KEY: ${MERIDIAN_TICKET_KEY:?set in deploy/.env}
       MERIDIAN_PUBLIC_GATEWAY_HOST: ${MERIDIAN_PUBLIC_GATEWAY_HOST:-127.0.0.1}
       MERIDIAN_DEV_PASSWORD: ${MERIDIAN_DEV_PASSWORD:-dev}
     ports: ["5080:5080/tcp"]
+    depends_on: *after-migrate
+
+volumes:
+  pgdata:

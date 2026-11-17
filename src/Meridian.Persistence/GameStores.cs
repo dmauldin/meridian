@@ -4,9 +4,10 @@ namespace Meridian.Persistence;
 public static class GameStores
 {
     /// <summary>
-    /// <c>MERIDIAN_STORE</c>: <c>file</c> (default; a JSON file shared by local processes, in
+    /// <c>MERIDIAN_STORE</c>: <c>postgres</c> (production; <c>MERIDIAN_DATABASE_URL</c>, migrated
+    /// with scripts/db-migrate.sh), <c>file</c> (default; a JSON file shared by local processes, in
     /// <c>MERIDIAN_STORE_DIR</c> or the user's local app-data folder) or <c>memory</c> (one process
-    /// only, nothing kept). <c>postgres</c> arrives with the Npgsql store.
+    /// only, nothing kept).
     /// </summary>
     public static IGameStore FromEnvironment(Func<string, string?> env, TextWriter log)
     {
@@ -21,11 +22,18 @@ public static class GameStores
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "dev-store");
                 log.WriteLine($"store: development JSON file in {dir}");
                 return new JsonFileGameStore(dir);
+            case "postgres":
+                var url = env("MERIDIAN_DATABASE_URL") is { Length: > 0 } u
+                    ? u
+                    : throw new InvalidOperationException("MERIDIAN_STORE=postgres needs MERIDIAN_DATABASE_URL (a postgres:// URL or an Npgsql connection string).");
+                var store = PostgresGameStore.Open(url);
+                log.WriteLine("store: Postgres");
+                return store;
             case "memory":
                 log.WriteLine("store: in memory (this process only; nothing is kept)");
                 return new InMemoryGameStore();
             default:
-                throw new InvalidOperationException($"MERIDIAN_STORE='{kind}' is not supported (use 'file' or 'memory').");
+                throw new InvalidOperationException($"MERIDIAN_STORE='{kind}' is not supported (use 'postgres', 'file' or 'memory').");
         }
     }
 }

@@ -47,7 +47,7 @@ public sealed class EndToEndTests : IDisposable
         _auth = new AuthService(
             new AuthOptions { PublicGatewayPort = _gateway.Port },
             _store,
-            new PasswordHasher(1_000),
+            new PasswordHasher(memoryKib: 1024, passes: 1),
             _sealer,
             TimeProvider.System,
             Meridian.Content.ContentPacks.Embedded);
@@ -264,6 +264,7 @@ public sealed class EndToEndTests : IDisposable
         _gatewayThread.Join();
         _gateway.Dispose();
         _zone.Dispose();
+        _auth.Dispose();
         _sealer.Dispose();
         _stop.Dispose();
     }

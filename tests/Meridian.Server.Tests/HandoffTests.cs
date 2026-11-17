@@ -53,12 +53,13 @@ public sealed class HandoffTests : IDisposable
             _ => { });
         _gateway.Start();
         Run(() => _gateway.Run(_stop.Token));
-        _auth = new AuthService(new AuthOptions { PublicGatewayPort = _gateway.Port }, _store, new PasswordHasher(1_000), _sealer, TimeProvider.System, ContentPacks.Embedded);
+        _auth = new AuthService(new AuthOptions { PublicGatewayPort = _gateway.Port }, _store, new PasswordHasher(memoryKib: 1024, passes: 1), _sealer, TimeProvider.System, ContentPacks.Embedded);
         Until(() => _gateway.ZoneConnected, "gateway to reach both zones");
     }
 
     public void Dispose()
     {
+        _auth.Dispose();
         _stop.Cancel();
         foreach (var t in _threads)
         {

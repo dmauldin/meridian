@@ -57,7 +57,15 @@ internal sealed class StoreModel
         {
             return (null, CreateCharacterError.TooManyCharacters);
         }
-        var created = draft with { Id = ++_lastCharacterId, Version = 1, Trained = [.. draft.Trained], Items = [.. draft.Items], KnownProtocols = [.. draft.KnownProtocols.Order()], Buffs = [.. draft.Buffs] };
+        var created = draft with
+        {
+            Id = ++_lastCharacterId,
+            Version = 1,
+            Trained = [.. draft.Trained],
+            Items = SortedItems(draft.Items),
+            KnownProtocols = [.. draft.KnownProtocols.Distinct().Order()],
+            Buffs = LiveBuffs(draft.Buffs),
+        };
         AddCharacter(created);
         return (created, CreateCharacterError.None);
     }
@@ -87,9 +95,9 @@ internal sealed class StoreModel
                 UnspentPoints = r.UnspentPoints,
                 Trained = [.. r.Trained],
                 Placement = r.Placement,
-                Items = [.. r.Items],
+                Items = SortedItems(r.Items),
                 KnownProtocols = [.. r.KnownProtocols.Distinct().Order()],
-                Buffs = [.. r.Buffs.Where(b => b.RemainingMs > 0)],
+                Buffs = LiveBuffs(r.Buffs),
                 Version = stored.Version + 1,
             };
             _characters[r.Id] = saved;
@@ -97,6 +105,14 @@ internal sealed class StoreModel
         }
         return outcomes;
     }
+
+    /// <summary>Items in (location, position) order, as every store returns them.</summary>
+    private static StoredItem[] SortedItems(IEnumerable<StoredItem> items) =>
+        [.. items.OrderBy(i => i.Location).ThenBy(i => i.Position)];
+
+    /// <summary>Buffs still running, one per Protocol (the first given wins), in Protocol id order.</summary>
+    private static SavedBuff[] LiveBuffs(IEnumerable<SavedBuff> buffs) =>
+        [.. buffs.Where(b => b.RemainingMs > 0).DistinctBy(b => b.ProtocolId).OrderBy(b => b.ProtocolId)];
 
     private void AddAccount(AccountRecord account)
     {

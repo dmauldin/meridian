@@ -8,6 +8,8 @@
 # and the rifle goes inactive when the Medic's buff is dropped. Exits 0 on PASS.
 #
 # Usage: scripts/m2-gate.sh
+#   Uses the development file store unless MERIDIAN_STORE is set; with MERIDIAN_STORE=postgres,
+#   MERIDIAN_DATABASE_URL must name a migrated database (scripts/db-test.sh runs it that way).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,9 +21,11 @@ rm -f "$OUT"/*.log
 echo "building (Release)..."
 dotnet build "$ROOT/Meridian.slnx" -c Release -v quiet -nologo >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log"; exit 1; }
 
-export MERIDIAN_DEV_COMMANDS=1 MERIDIAN_PBKDF2_ITERATIONS=10000
-export MERIDIAN_STORE=file MERIDIAN_STORE_DIR="$OUT/store"
+export MERIDIAN_DEV_COMMANDS=1 MERIDIAN_ARGON2_MEMORY_KIB=1024 MERIDIAN_ARGON2_PASSES=1
+export MERIDIAN_STORE="${MERIDIAN_STORE:-file}" MERIDIAN_STORE_DIR="$OUT/store"
 rm -rf "$MERIDIAN_STORE_DIR"
+if [[ "$MERIDIAN_STORE" == postgres ]]; then : "${MERIDIAN_DATABASE_URL:?MERIDIAN_STORE=postgres needs MERIDIAN_DATABASE_URL}"; fi
+echo "store: $MERIDIAN_STORE"
 
 pids=()
 cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; wait 2>/dev/null || true; }

@@ -28,18 +28,23 @@ var options = new AuthOptions
     PublicGatewayHost = Env("MERIDIAN_PUBLIC_GATEWAY_HOST", "127.0.0.1"),
     PublicGatewayPort = int.Parse(Env("MERIDIAN_PUBLIC_GATEWAY_PORT", NetDefaults.GatewayPort.ToString(CultureInfo.InvariantCulture)), CultureInfo.InvariantCulture),
 };
-// Lowering iterations is for load tests only (they register hundreds of bots at once).
-var iterations = int.Parse(Env("MERIDIAN_PBKDF2_ITERATIONS", PasswordHasher.DefaultIterations.ToString(CultureInfo.InvariantCulture)), CultureInfo.InvariantCulture);
-if (iterations < PasswordHasher.DefaultIterations)
+// Lowering the cost is for load tests only (they register hundreds of bots at once).
+var memoryKib = int.Parse(Env("MERIDIAN_ARGON2_MEMORY_KIB", PasswordHasher.DefaultMemoryKib.ToString(CultureInfo.InvariantCulture)), CultureInfo.InvariantCulture);
+var passes = int.Parse(Env("MERIDIAN_ARGON2_PASSES", PasswordHasher.DefaultPasses.ToString(CultureInfo.InvariantCulture)), CultureInfo.InvariantCulture);
+if (memoryKib < PasswordHasher.DefaultMemoryKib || passes < PasswordHasher.DefaultPasses)
 {
-    Console.Error.WriteLine($"WARNING: password hashing at {iterations} PBKDF2 iterations (default {PasswordHasher.DefaultIterations}); never in production.");
+    Console.Error.WriteLine($"WARNING: password hashing at Argon2id m={memoryKib} KiB, t={passes} (default m={PasswordHasher.DefaultMemoryKib}, t={PasswordHasher.DefaultPasses}); never in production.");
+}
+if (Environment.GetEnvironmentVariable("MERIDIAN_PBKDF2_ITERATIONS") is not null)
+{
+    Console.Error.WriteLine("WARNING: MERIDIAN_PBKDF2_ITERATIONS is ignored: new hashes are Argon2id (see MERIDIAN_ARGON2_MEMORY_KIB and MERIDIAN_ARGON2_PASSES).");
 }
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(_ => new TicketSealer(DevSecrets.TicketKeyFromEnvironment("MERIDIAN_TICKET_KEY", Console.Error)));
 builder.Services.AddSingleton(Meridian.Content.ContentPacks.Embedded);
 builder.Services.AddSingleton(_ => GameStores.FromEnvironment(Environment.GetEnvironmentVariable, Console.Out));
-builder.Services.AddSingleton(new PasswordHasher(iterations));
+builder.Services.AddSingleton(new PasswordHasher(memoryKib, passes));
 builder.Services.AddSingleton<AuthService>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, AuthJsonContext.Default));
 

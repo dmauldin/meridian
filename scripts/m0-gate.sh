@@ -29,7 +29,7 @@ export MERIDIAN_LOGINS_PER_MINUTE_PER_IP=100000
 export DOTNET_gcServer=0
 # A fresh development store per run, shared by auth and zone. Bots register on first login;
 # cheap password hashing keeps 100 registrations from dominating start-up (auth warns about it).
-export MERIDIAN_STORE=file MERIDIAN_STORE_DIR="$OUT/store" MERIDIAN_PBKDF2_ITERATIONS=10000
+export MERIDIAN_STORE=file MERIDIAN_STORE_DIR="$OUT/store" MERIDIAN_ARGON2_MEMORY_KIB=1024 MERIDIAN_ARGON2_PASSES=1
 rm -rf "$MERIDIAN_STORE_DIR"
 
 pids=()

@@ -23,7 +23,8 @@ jobs:
         run: dotnet test --solution Meridian.slnx -c Release --no-build
 
   db:
-    # Migrations apply cleanly to an empty Postgres, re-apply as a no-op, and pass db/checks.sql.
+    # Migrations apply cleanly to an empty Postgres, re-apply as a no-op, and pass db/checks.sql;
+    # then the Postgres store passes the store contract tests and the M2 gate runs on it.
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -33,11 +34,20 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
       - run: scripts/db-check.sh
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      - run: scripts/db-test.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-m2-gate-logs
+          path: artifacts/m2-gate/
 
   m0-gate:
     # Load test: 100 bots, one zone, 20 Hz. Thresholds live in the script.

@@ -1,6 +1,8 @@
 <Project>
   <ItemGroup>
+    <PackageVersion Include="Geralt" Version="4.5.0" />
     <PackageVersion Include="LiteNetLib" Version="2.1.5" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
