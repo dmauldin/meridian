@@ -149,6 +149,16 @@ public abstract class StoreContractTests : IDisposable
     }
 
     [Fact]
+    public async Task Credits_are_created_saved_and_loaded()
+    {
+        var a = await Account();
+        var rook = (await Store.CreateCharacterAsync(Draft(a.Id, "Rook") with { Credits = 250 }, 8, Ct)).Created!;
+        Assert.Equal(250, rook.Credits);
+        await Store.SaveCharactersAsync([rook with { Credits = 1_000_000_000_000 }], Ct);
+        Assert.Equal(1_000_000_000_000, (await OpenAgain().LoadCharacterAsync(rook.Id, Ct))!.Credits);
+    }
+
+    [Fact]
     public async Task Every_store_returns_items_and_buffs_in_the_same_order()
     {
         var a = await Account();

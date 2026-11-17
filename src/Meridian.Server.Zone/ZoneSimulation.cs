@@ -250,7 +250,8 @@ public sealed partial class ZoneSimulation : IServerBoundHandler<ClientRef>
             new Placement(_zone.Key, player.Position, health),
             CharacterRecords.ItemsOf(player.Outfit),
             [.. player.Lattice.Known],
-            [.. player.Lattice.RunningWithRemaining(Tick).Select(r => new SavedBuff(r.ProtocolId, r.RemainingMs))]);
+            [.. player.Lattice.RunningWithRemaining(Tick).Select(r => new SavedBuff(r.ProtocolId, r.RemainingMs))],
+            player.Credits);
     }
 
     /// <summary>

@@ -98,6 +98,7 @@ internal sealed class StoreModel
                 Items = SortedItems(r.Items),
                 KnownProtocols = [.. r.KnownProtocols.Distinct().Order()],
                 Buffs = LiveBuffs(r.Buffs),
+                Credits = r.Credits,
                 Version = stored.Version + 1,
             };
             _characters[r.Id] = saved;
@@ -142,7 +143,8 @@ internal sealed class StoreModel
             c.Version,
             [.. c.Items.Select(i => new ItemRow((int)i.Location, i.Position, i.TemplateId, i.Ql))],
             [.. c.KnownProtocols],
-            [.. c.Buffs.Select(b => new BuffRow(b.ProtocolId, b.RemainingMs))]))]);
+            [.. c.Buffs.Select(b => new BuffRow(b.ProtocolId, b.RemainingMs))],
+            c.Credits))]);
 
     public static StoreModel FromFile(StoreFile file)
     {
@@ -162,7 +164,8 @@ internal sealed class StoreModel
                 c.Version,
                 [.. (c.Items ?? []).Select(i => new StoredItem((ItemLocation)i.Location, i.Position, i.TemplateId, i.Ql))],
                 [.. c.Protocols ?? []],
-                [.. (c.Buffs ?? []).Select(b => new SavedBuff(b.ProtocolId, b.RemainingMs))]));
+                [.. (c.Buffs ?? []).Select(b => new SavedBuff(b.ProtocolId, b.RemainingMs))],
+                c.Credits ?? 0));
         }
         model._lastAccountId = Math.Max(model._lastAccountId, file.LastAccountId);
         model._lastCharacterId = Math.Max(model._lastCharacterId, file.LastCharacterId);
@@ -191,7 +194,8 @@ internal sealed record CharacterRow(
     long Version,
     List<ItemRow>? Items,
     List<int>? Protocols,
-    List<BuffRow>? Buffs);
+    List<BuffRow>? Buffs,
+    long? Credits); // files from before credits have none: 0, as the migration gives old rows
 
 /// <summary>A row of <c>character_buffs</c>.</summary>
 internal sealed record BuffRow(int ProtocolId, int RemainingMs);
