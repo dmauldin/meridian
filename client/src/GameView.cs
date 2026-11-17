@@ -22,6 +22,8 @@ public partial class GameView : Node3D
     private readonly CanvasLayer _windows = new() { Layer = 2 };
     private readonly CharacterWindow _character = new();
     private readonly InventoryWindow _inventory = new();
+    private readonly ShopWindow _shop = new();
+    private int _shopInReach; // id of the shop last in reach, 0 for none
     private readonly ProtocolBar _protocolBar = new();
     private readonly Node3D _exits = new() { Name = "Exits" };
     private EntityView? _selfView;
@@ -64,9 +66,11 @@ public partial class GameView : Node3D
         AddChild(_windows);
         _character.Bind(Session);
         _inventory.Bind(Session);
+        _shop.Bind(Session);
         _protocolBar.Bind(Session);
         _windows.AddChild(_character);
         _windows.AddChild(_inventory);
+        _windows.AddChild(_shop);
         _windows.AddChild(_protocolBar);
         _protocolBar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterBottom, Control.LayoutPresetMode.Minsize, 16);
         LayoutWindows();
@@ -130,6 +134,10 @@ public partial class GameView : Node3D
         {
             ToggleInventory();
         }
+        else if (@event.IsActionPressed(Controls.Interact))
+        {
+            ToggleShop();
+        }
         else if (Enumerable.Range(1, 9).FirstOrDefault(i => @event.IsActionPressed(Controls.Protocol(i))) is > 0 and var number)
         {
             _protocolBar.CastHotkey(number);
@@ -157,6 +165,7 @@ public partial class GameView : Node3D
             return;
         }
         WorldDressing.BuildExits(_exits, zone, ContentPacks.Embedded);
+        WorldDressing.BuildShops(_exits, zone);
         if (_selfView is not null && _selfView.EntityId != World.SelfId)
         {
             _selfView.QueueFree();
@@ -188,6 +197,42 @@ public partial class GameView : Node3D
         _inventory.Refresh();
     }
 
+    /// <summary>Opens the shop in reach, or closes the shop window.</summary>
+    public void ToggleShop()
+    {
+        if (_shop.Visible)
+        {
+            _shop.Close();
+        }
+        else if (World.ShopInReach() is { } shop)
+        {
+            _shop.Open(shop);
+        }
+    }
+
+    /// <summary>
+    /// Keeps the shop prompt, the shop window and the inventory's Sell buttons in step with
+    /// which shop (if any) is in reach as the player walks.
+    /// </summary>
+    private void TrackShopInReach()
+    {
+        var shop = World.Status.Dead ? null : World.ShopInReach();
+        _hud.SetPrompt(shop is not null && !_shop.Visible ? $"Press F to trade with {shop.Name}" : "");
+        if ((shop?.Id ?? 0) == _shopInReach)
+        {
+            return;
+        }
+        _shopInReach = shop?.Id ?? 0;
+        if (_shop.Visible && _shop.Shop?.Id != shop?.Id)
+        {
+            _shop.Close(); // walked away
+        }
+        if (_inventory.Visible)
+        {
+            _inventory.Refresh(); // Sell buttons come and go
+        }
+    }
+
     /// <summary>
     /// Character window on the left between the self frame and the chat; inventory on the right
     /// below the net readout and above the help text. Both shrink (and scroll) on small screens,
@@ -206,6 +251,9 @@ public partial class GameView : Node3D
         _character.Place(new Vector2(Margin, Top), new Vector2(Math.Max(420, screen.X / 3), characterHeight));
         var inventoryWidth = Math.Min(_inventory.PreferredSize.X, screen.X / 2.5f);
         _inventory.Place(new Vector2(screen.X - inventoryWidth - Margin, 90), new Vector2(inventoryWidth, screen.Y - 90 - HelpHeight));
+        // The shop sits left of the inventory, so both can be open to sell.
+        var shopWidth = Math.Min(_shop.PreferredSize.X, screen.X / 3f);
+        _shop.Place(new Vector2(Math.Max(Margin, screen.X - inventoryWidth - shopWidth - (2 * Margin)), 90), new Vector2(shopWidth, screen.Y - 90 - HelpHeight));
     }
 
     /// <summary>The character window, for the autopilot's UI check.</summary>
@@ -213,6 +261,9 @@ public partial class GameView : Node3D
 
     /// <summary>The inventory window, for the autopilot's screenshots.</summary>
     public InventoryWindow InventoryWindow => _inventory;
+
+    /// <summary>The shop window, for the autopilot.</summary>
+    public ShopWindow ShopWindow => _shop;
 
     private (short X, short Z) KeyboardDirection()
     {
@@ -290,6 +341,7 @@ public partial class GameView : Node3D
                     _hud.AddChat($"[color=#8af]{Escape(notice.Text)}[/color]");
                     break;
                 case ZoneChanging change:
+                    _shop.Close();
                     // Leaving: drop everything from this zone until the destination's Welcome.
                     foreach (var view in _views.Values)
                     {
@@ -313,9 +365,20 @@ public partial class GameView : Node3D
                     {
                         _inventory.Refresh(); // requirement checks use current stats
                     }
+                    if (_shop.Visible)
+                    {
+                        _shop.Refresh(); // and so does the shop's "can use"
+                    }
                     break;
-                case InventoryChanged when _inventory.Visible:
-                    _inventory.Refresh();
+                case InventoryChanged:
+                    if (_inventory.Visible)
+                    {
+                        _inventory.Refresh();
+                    }
+                    if (_shop.Visible)
+                    {
+                        _shop.Refresh(); // the balance changed
+                    }
                     break;
                 case ExperienceGained xp:
                     FloatingText.Spawn(this, _selfView!.Position, $"+{xp.Amount} XP", new Color(0.7f, 0.6f, 1f));
@@ -366,6 +429,7 @@ public partial class GameView : Node3D
         _hud.SetEnergy(status.Energy, status.MaxEnergy);
         _hud.SetBuffs(ProtocolBarView.Buffs(ContentPacks.Embedded, World.Protocols, World.NowMs - World.ProtocolsReceivedMs), Session.CancelProtocol);
         _protocolBar.Refresh();
+        TrackShopInReach();
         if (World.Build is { } build)
         {
             _hud.SetProgress(build.Level, build.Profession.Name, build.Xp, build.XpToNext, build.UnspentPoints);

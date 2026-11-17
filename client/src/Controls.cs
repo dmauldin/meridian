@@ -18,6 +18,7 @@ public static class Controls
     public const string OpenChat = "open_chat";
     public const string ToggleCharacter = "toggle_character";
     public const string ToggleInventory = "toggle_inventory";
+    public const string Interact = "interact";
 
     /// <summary>Protocol bar hotkeys: "protocol_1" to "protocol_9".</summary>
     public static string Protocol(int number) => $"protocol_{number}";
@@ -26,7 +27,7 @@ public static class Controls
     public const string HelpText =
         "WASD move   Right-drag look   Wheel zoom\n" +
         "Tab / Left-click target   Q auto-attack   Esc clear\n" +
-        "Enter chat   C character   I inventory   1-9 Protocols";
+        "Enter chat   C character   I inventory   1-9 Protocols   F trade";
 
     public static void Register()
     {
@@ -40,6 +41,7 @@ public static class Controls
         Bind(OpenChat, Key.Enter, Key.KpEnter);
         Bind(ToggleCharacter, Key.C);
         Bind(ToggleInventory, Key.I);
+        Bind(Interact, Key.F);
         for (var i = 1; i <= 9; i++)
         {
             Bind(Protocol(i), Key.Key0 + i);

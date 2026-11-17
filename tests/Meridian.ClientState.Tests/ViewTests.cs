@@ -110,4 +110,39 @@ public class ViewTests
         Assert.Equal(("Reflex Boost I", 60_000, "1:00"), (chip.Name, chip.RemainingMs, chip.Countdown));
         Assert.Equal(0, ProtocolBarView.Buffs(Pack, protocols, 999_999)[0].RemainingMs);
     }
+
+    [Fact]
+    public void The_shop_lists_its_stock_with_prices_and_what_you_can_afford_and_use()
+    {
+        var (_, effective) = Operative();
+        var rows = ShopView.Rows(Pack, Pack.Shops["shop.ashgate_outfitter"], credits: 300, effective, Profession.Operative);
+        var carbine4 = rows[0];
+        Assert.Equal(new ShopRow(0, "Combine Issue Carbine QL 4", 276, Affordable: true, Usable: true), carbine4);
+        Assert.False(rows[1].Affordable); // QL 8 carbine, 610
+        Assert.Contains(rows, r => r.Name.StartsWith("Shock Maul", StringComparison.Ordinal) && !r.Usable); // an Operative's melee is too low
+        Assert.Equal(Enumerable.Range(0, rows.Count), rows.Select(r => r.StockIndex));
+    }
+
+    [Fact]
+    public void Sell_prices_are_a_tenth_and_valueless_items_have_none()
+    {
+        Assert.Equal(27, ShopView.SellPrice(Pack, new OwnedItem(Pack.Items["rifle.combine_carbine"].Id, 4)));
+        Assert.Null(ShopView.SellPrice(Pack, new OwnedItem(Pack.Items["unarmed.fists"].Id, 1)));
+        Assert.Null(ShopView.SellPrice(Pack, new OwnedItem(99_999, 1)));
+        Assert.Equal("1,234,567 cr", ShopView.Credits(1_234_567));
+    }
+
+    [Fact]
+    public void A_shop_is_in_reach_only_close_to_it_in_its_own_zone()
+    {
+        var world = new ClientWorld();
+        Assert.Null(world.ShopInReach()); // before Welcome
+        var outfitter = Pack.Shops["shop.ashgate_outfitter"];
+        world.OnWelcome(null!, new Meridian.Wire.Welcome { EntityId = 1, ZoneId = 3, TickRateHz = 20, X = outfitter.At.X + 4_000, Z = outfitter.At.Z, ContentHash = Pack.Hash });
+        Assert.Equal(outfitter, world.ShopInReach());
+        world.OnWelcome(null!, new Meridian.Wire.Welcome { EntityId = 1, ZoneId = 3, TickRateHz = 20, X = outfitter.At.X + 6_000, Z = outfitter.At.Z, ContentHash = Pack.Hash });
+        Assert.Null(world.ShopInReach());
+        world.OnWelcome(null!, new Meridian.Wire.Welcome { EntityId = 1, ZoneId = 1, TickRateHz = 20, X = outfitter.At.X, Z = outfitter.At.Z, ContentHash = Pack.Hash });
+        Assert.Null(world.ShopInReach()); // the same spot in Glasswind Flats
+    }
 }

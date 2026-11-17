@@ -24,6 +24,7 @@ public partial class Hud : CanvasLayer
     private readonly RichTextLabel _chatLog = new() { BbcodeEnabled = true, ScrollFollowing = true, FitContent = false };
     private readonly Label _banner = new() { HorizontalAlignment = HorizontalAlignment.Center };
     private readonly Label _netInfo = new();
+    private readonly Label _prompt = new() { HorizontalAlignment = HorizontalAlignment.Center };
 
     public LineEdit ChatInput { get; } = new() { PlaceholderText = "Press Enter to chat", MaxLength = 200 };
 
@@ -75,6 +76,16 @@ public partial class Hud : CanvasLayer
         _banner.AddThemeFontSizeOverride("font_size", 30);
         root.AddChild(_banner);
         _banner.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center, Control.LayoutPresetMode.Minsize);
+
+        // Interaction prompt, above the Protocol bar.
+        _prompt.AddThemeFontSizeOverride("font_size", 18);
+        _prompt.AddThemeColorOverride("font_color", new Color(1f, 0.85f, 0.5f));
+        _prompt.AddThemeConstantOverride("outline_size", 6);
+        _prompt.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 0.8f));
+        root.AddChild(_prompt);
+        // A centred band 600 wide, clear of the Protocol bar below it.
+        _prompt.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
+        (_prompt.OffsetLeft, _prompt.OffsetRight, _prompt.OffsetTop, _prompt.OffsetBottom) = (-300, 300, -150, -120);
 
         // Help, bottom-right; net readout, top-right.
         var help = new Label { Text = Controls.HelpText, Modulate = new Color(1, 1, 1, 0.55f), HorizontalAlignment = HorizontalAlignment.Right };
@@ -159,6 +170,9 @@ public partial class Hud : CanvasLayer
     public void AddChat(string bbcode) => _chatLog.AppendText(bbcode + "\n");
 
     public void SetBanner(string text) => _banner.Text = text;
+
+    /// <summary>A short "press F to..." line above the Protocol bar; empty hides it.</summary>
+    public void SetPrompt(string text) => _prompt.Text = text;
 
     public void SetNetInfo(string text) => _netInfo.Text = text;
 

@@ -137,4 +137,43 @@ public static class WorldDressing
             });
         }
     }
+
+    /// <summary>Shop terminals: an amber-lit pillar with the shop's name over it. Adds to <paramref name="root"/> (BuildExits clears it).</summary>
+    public static void BuildShops(Node3D root, Meridian.Core.Content.ZoneDef zone)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(zone);
+        var body = new StandardMaterial3D { AlbedoColor = new Color(0.22f, 0.24f, 0.28f), Metallic = 0.6f, Roughness = 0.4f };
+        var screen = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(1f, 0.7f, 0.3f),
+            EmissionEnabled = true,
+            Emission = new Color(1f, 0.65f, 0.25f),
+            EmissionEnergyMultiplier = 1.6f,
+        };
+        foreach (var shop in zone.Shops)
+        {
+            root.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.9f, 1.8f, 0.6f) },
+                MaterialOverride = body,
+                Position = Units.ToGodot(shop.At, 0.9f),
+            });
+            root.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.7f, 0.5f, 0.62f) },
+                MaterialOverride = screen,
+                Position = Units.ToGodot(shop.At, 1.45f),
+            });
+            root.AddChild(new Label3D
+            {
+                Text = shop.Name,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                FontSize = 56,
+                OutlineSize = 12,
+                Modulate = new Color(1f, 0.85f, 0.55f),
+                Position = Units.ToGodot(shop.At, 2.6f),
+            });
+        }
+    }
 }
